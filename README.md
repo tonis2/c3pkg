@@ -58,3 +58,8 @@ supported C3 version come from the upload form because the manifest does not car
 
 Each version records two SHA-256 values: of the uploaded file, and of its contents (sorted
 `<sha256>  <path>` lines), so a zipped library and its unpacked directory give the same value.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). The vendored Lit build in `web/static/vendor/lit` is
+BSD-3-Clause (Google LLC); its license header is kept in the file.
