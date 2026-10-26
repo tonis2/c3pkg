@@ -4,3 +4,5 @@ data/
 .env
 web/test/node_modules/
 web/test/shots/
+# the design app keeps re-saving its working copy here; the tracked copy is design/website.fig
+/website.fig
