@@ -88,7 +88,7 @@
     {{if .Latest}}<span class="version-badge mono">{{.Latest}}</span>{{end}}
   </div>
   <p class="pkg-desc">{{.Description}}</p>
-  {{if .Tags}}<div class="tags">{{range .Tags}}<a class="chip" href="/search?tag={{.}}">{{.}}</a>{{end}}</div>{{end}}
+  {{if .Tags}}<div class="tags">{{range .Tags}}<a class="chip" href="/?tag={{.}}">{{.}}</a>{{end}}</div>{{end}}
   <div class="pkg-meta muted small">
     <span title="Downloads">{{.Downloads}} downloads</span>
     <span title="Stars">★ {{.Stars}}</span>

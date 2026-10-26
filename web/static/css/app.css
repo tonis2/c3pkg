@@ -15,11 +15,6 @@ code, pre, .mono { font-family: var(--font-mono); }
 .site-header { border-bottom: 1px solid var(--border); background: var(--surface); }
 .site-header .container { display: flex; align-items: center; gap: 24px; height: 64px; }
 .wordmark { font-weight: 700; font-size: 20px; color: var(--text); }
-.wordmark .badge {
-  margin-left: 8px; padding: 2px 8px; border-radius: 999px;
-  border: 1px solid var(--accent); color: var(--accent);
-  font: 12px var(--font-mono);
-}
 .site-header nav { margin-left: auto; display: flex; gap: 16px; align-items: center; }
 
 .card {
@@ -116,22 +111,11 @@ h2 { font-size: 20px; margin: 0 0 12px; }
 }
 
 .header-search { flex: 1; max-width: 420px; }
-.header-search input, .searchbar input {
+.header-search input {
   width: 100%; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--bg); color: var(--text); font: 15px var(--font-ui);
 }
-.header-search input:focus, .searchbar input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
-
-.hero { text-align: center; padding: 40px 24px; }
-.hero h1 { font-size: 36px; }
-.searchbar { display: flex; gap: 12px; max-width: 640px; margin: 24px auto; }
-.searchbar c3-search { flex: 1; }
-.searchbar input { padding: 12px 20px; font-size: 17px; }
-.hero .tags { justify-content: center; align-items: center; margin-top: 16px; }
-.stats { display: flex; justify-content: center; gap: 48px; margin: 24px 0 0; }
-.stats div { display: flex; flex-direction: column-reverse; }
-.stats dd { margin: 0; font-size: 28px; font-weight: 700; }
-.stats dt { color: var(--text-muted); font-size: 14px; }
+.header-search input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .seg a { padding: 8px 16px; color: var(--text-muted); font-size: 14px; font-weight: 600; background: var(--surface); }
@@ -152,9 +136,7 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .spark rect { fill: var(--accent); }
 
 @media (max-width: 800px) {
-  .header-search { display: none; }
-  .stats { gap: 24px; }
-  .hero h1 { font-size: 28px; }
+  .header-search { order: 3; flex-basis: 100%; max-width: none; }
 }
 
 .btn-danger { border-color: var(--danger); color: var(--danger); }
@@ -210,8 +192,6 @@ c3-login-dialog { display: contents; }
   .tabs { gap: 16px; overflow-x: auto; }
   .grid { grid-template-columns: minmax(0, 1fr); }
   .split { flex-wrap: wrap; gap: 12px; }
-  .searchbar { flex-wrap: wrap; }
-  .searchbar c3-search { flex-basis: 100%; }
 }
 @media (max-width: 600px) {
   .container { padding: 0 16px; }

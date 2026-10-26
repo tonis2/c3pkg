@@ -16,7 +16,6 @@ type sortLink struct {
 }
 
 type listingView struct {
-	Home      bool // the landing page with the hero, as opposed to a search result page
 	Q, Tag    string
 	Sort      string
 	Packages  []store.Summary
@@ -25,8 +24,7 @@ type listingView struct {
 	PrevURL   string
 	NextURL   string
 	SortLinks []sortLink
-	Stats     store.Stats
-	Tags      []store.TagCount
+	ClearURL  string // the listing without its query and tag filters, same sort
 }
 
 var sortOptions = []struct{ key, label string }{
@@ -52,7 +50,7 @@ func pageParam(r *http.Request) int {
 	return n
 }
 
-// listURL builds /search?... keeping only non-default parameters.
+// listURL builds /?... keeping only non-default parameters.
 func listURL(q, tag, sort string, page int) string {
 	v := url.Values{}
 	if q != "" {
@@ -70,52 +68,48 @@ func listURL(q, tag, sort string, page int) string {
 	if len(v) == 0 {
 		return "/"
 	}
-	return "/search?" + v.Encode()
+	return "/?" + v.Encode()
 }
 
-// listing serves both the home page and /search.
-func (s *Server) listing(home bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		q := strings.TrimSpace(r.URL.Query().Get("q"))
-		if len(q) > 100 {
-			q = q[:100]
-		}
-		tag := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tag")))
-		sort := normalizeSort(r.URL.Query().Get("sort"))
-		page := pageParam(r)
-
-		list, total, err := s.store.ListPackages(r.Context(), store.ListParams{Sort: sort, Q: q, Tag: tag, Page: page})
-		if err != nil {
-			s.serverError(w, "list packages", err)
-			return
-		}
-		v := listingView{Home: home && q == "" && tag == "", Q: q, Tag: tag, Sort: sort, Packages: list, Total: total, Page: page}
-		for _, o := range sortOptions {
-			v.SortLinks = append(v.SortLinks, sortLink{o.label, listURL(q, tag, o.key, 1), o.key == sort})
-		}
-		if page > 1 {
-			v.PrevURL = listURL(q, tag, sort, page-1)
-		}
-		if page*store.PageSize < total {
-			v.NextURL = listURL(q, tag, sort, page+1)
-		}
-		title := ""
-		if v.Home {
-			if v.Stats, err = s.store.Stats(r.Context()); err == nil {
-				v.Tags, err = s.store.PopularTags(r.Context(), 12)
-			}
-			if err != nil {
-				s.serverError(w, "home data", err)
-				return
-			}
-		} else {
-			title = "Search"
-			if q != "" {
-				title = "Search: " + q
-			}
-		}
-		s.render(w, r, "home", pageData{Title: title, NoHeaderSearch: v.Home, Data: v})
+// listing serves the package list: the home page, its sort views and search results.
+func (s *Server) listing(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 100 {
+		q = q[:100]
 	}
+	tag := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tag")))
+	sort := normalizeSort(r.URL.Query().Get("sort"))
+	page := pageParam(r)
+
+	list, total, err := s.store.ListPackages(r.Context(), store.ListParams{Sort: sort, Q: q, Tag: tag, Page: page})
+	if err != nil {
+		s.serverError(w, "list packages", err)
+		return
+	}
+	v := listingView{Q: q, Tag: tag, Sort: sort, Packages: list, Total: total, Page: page, ClearURL: listURL("", "", sort, 1)}
+	for _, o := range sortOptions {
+		v.SortLinks = append(v.SortLinks, sortLink{o.label, listURL(q, tag, o.key, 1), o.key == sort})
+	}
+	if page > 1 {
+		v.PrevURL = listURL(q, tag, sort, page-1)
+	}
+	if page*store.PageSize < total {
+		v.NextURL = listURL(q, tag, sort, page+1)
+	}
+	title := ""
+	if q != "" {
+		title = "Search: " + q
+	}
+	s.render(w, r, "home", pageData{Title: title, SearchQ: q, Data: v})
+}
+
+// searchRedirect keeps old /search links working.
+func (s *Server) searchRedirect(w http.ResponseWriter, r *http.Request) {
+	target := "/"
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	http.Redirect(w, r, target, http.StatusMovedPermanently)
 }
 
 // ---- stars ----

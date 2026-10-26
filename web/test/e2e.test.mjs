@@ -142,7 +142,7 @@ async function login(p, email = 'alice@example.com') {
 
 test('components load without console errors or CSP violations', async () => {
   const p = await page();
-  for (const path of ['/', '/packages/vulkan', '/search?q=gpu']) {
+  for (const path of ['/', '/packages/vulkan', '/?q=gpu']) {
     await p.goto(BASE + path);
     await until(() => p.evaluate(() => !!customElements.get('c3-search')), 'c3-search to be defined');
   }
@@ -153,30 +153,30 @@ test('search suggests packages and supports keyboard selection', async () => {
   const p = await page();
   await p.goto(BASE + '/');
   await shot(p, 'home');
-  await p.locator('.hero input[name=q]').pressSequentially('vul', { delay: 30 });
-  const first = p.locator('.hero .suggest li').first();
+  await p.locator('.header-search input[name=q]').pressSequentially('vul', { delay: 30 });
+  const first = p.locator('.header-search .suggest li').first();
   await first.waitFor();
   assert.match(await first.innerText(), /vulkan/);
-  assert.equal(await p.locator('.hero input[name=q]').getAttribute('aria-expanded'), 'true');
+  assert.equal(await p.locator('.header-search input[name=q]').getAttribute('aria-expanded'), 'true');
   await shot(p, 'home-suggest');
   await p.keyboard.press('ArrowDown');
   await Promise.all([p.waitForURL('**/packages/vulkan'), p.keyboard.press('Enter')]);
   await p.goto(BASE + '/');
-  await p.locator('.hero input[name=q]').pressSequentially('zzzz');
+  await p.locator('.header-search input[name=q]').pressSequentially('zzzz');
   await p.waitForTimeout(500);
-  assert.equal(await p.locator('.hero .suggest').count(), 0, 'no suggestions for nonsense');
+  assert.equal(await p.locator('.header-search .suggest').count(), 0, 'no suggestions for nonsense');
   // Escape closes the list
-  await p.fill('.hero input[name=q]', '');
-  await p.locator('.hero input[name=q]').pressSequentially('gpu');
-  await p.locator('.hero .suggest li').first().waitFor();
+  await p.fill('.header-search input[name=q]', '');
+  await p.locator('.header-search input[name=q]').pressSequentially('gpu');
+  await p.locator('.header-search .suggest li').first().waitFor();
   await p.keyboard.press('Escape');
-  assert.equal(await p.locator('.hero .suggest').count(), 0);
+  assert.equal(await p.locator('.header-search .suggest').count(), 0);
   assert.deepEqual(p.errors, []);
 });
 
 test('"/" focuses the search box but not while typing elsewhere', async () => {
   const p = await page();
-  await p.goto(BASE + '/search?q=gpu');
+  await p.goto(BASE + '/?q=gpu');
   await p.locator('body').click({ position: { x: 5, y: 500 } });
   await p.keyboard.press('/');
   assert.equal(await p.evaluate(() => document.activeElement?.getAttribute('name')), 'q');
@@ -284,8 +284,8 @@ test('copy button puts the download command on the clipboard', async () => {
 test('pages work without JavaScript', async () => {
   const p = await page({ javaScriptEnabled: false });
   await p.goto(BASE + '/');
-  await p.fill('.hero input[name=q]', 'json');
-  await Promise.all([p.waitForURL('**/search?q=json'), p.click('.hero button[type=submit]')]);
+  await p.fill('.header-search input[name=q]', 'json');
+  await Promise.all([p.waitForURL('**/?q=json'), p.press('.header-search input[name=q]', 'Enter')]);
   assert.match(await p.locator('.pkg-card').first().innerText(), /json/);
   await p.click('header a[href="/login"]');
   await p.waitForURL('**/login');
@@ -295,7 +295,7 @@ test('pages work without JavaScript', async () => {
 test('screenshots of the main pages', async (t) => {
   if (!SHOTS) return t.skip('set SHOTS to a directory to capture screenshots');
   const p = await page();
-  await p.goto(BASE + '/search?q=gpu&sort=downloads'); await shot(p, 'search');
+  await p.goto(BASE + '/?q=gpu&sort=downloads'); await shot(p, 'search');
   await p.goto(BASE + '/packages/vulkan'); await shot(p, 'package');
   await p.goto(BASE + '/packages/vulkan/versions'); await shot(p, 'package-versions');
   await p.goto(BASE + '/register'); await shot(p, 'register');
@@ -306,5 +306,7 @@ test('screenshots of the main pages', async (t) => {
   await p.goto(BASE + '/users/alice'); await shot(p, 'user');
   await p.setViewportSize({ width: 390, height: 844 });
   await p.goto(BASE + '/'); await shot(p, 'mobile-home');
+  const right = await p.evaluate(() => ['.header-search input', '.seg', '.pkg-card'].map(sel => document.querySelector(sel).getBoundingClientRect().right));
+  assert.ok(right.every(r => r <= 390 - 16 + 0.5), `mobile home overflows the gutter: ${right}`);
   await p.goto(BASE + '/packages/vulkan'); await shot(p, 'mobile-package');
 });

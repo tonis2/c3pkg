@@ -39,7 +39,7 @@ type Server struct {
 // pageData is what every template receives.
 type pageData struct {
 	Title          string
-	NoHeaderSearch bool
+	SearchQ        string // prefills the navbar search box
 	NoLoginDialog  bool   // the page is itself a login/register form
 	GitHub         bool   // GitHub login is configured
 	Base           string // public base URL, for absolute links in copyable commands
@@ -88,8 +88,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/static/favicon.svg", http.StatusMovedPermanently)
 	})
-	mux.HandleFunc("GET /{$}", s.listing(true))
-	mux.HandleFunc("GET /search", s.listing(false))
+	mux.HandleFunc("GET /{$}", s.listing)
+	mux.HandleFunc("GET /search", s.searchRedirect)
 
 	mux.HandleFunc("GET /register", s.registerForm)
 	mux.HandleFunc("POST /register", s.limit(ruleRegister, s.registerSubmit))

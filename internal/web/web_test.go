@@ -115,7 +115,7 @@ func (b *browser) register(email, login, pw string) *http.Response {
 
 func TestPublicPages(t *testing.T) {
 	b := newEnv(t).browser()
-	for path, want := range map[string]string{"/healthz": "ok", "/": "Find and share C3 libraries", "/static/css/tokens.css": "--accent", "/login": "Log in", "/robots.txt": "Disallow: /api/", "/static/favicon.svg": "<svg", "/register": "Create your account"} {
+	for path, want := range map[string]string{"/healthz": "ok", "/": "<h1>Packages</h1>", "/static/css/tokens.css": "--accent", "/login": "Log in", "/robots.txt": "Disallow: /api/", "/static/favicon.svg": "<svg", "/register": "Create your account"} {
 		resp, body := b.get(path)
 		if resp.StatusCode != 200 || !strings.Contains(body, want) {
 			t.Errorf("%s: %d %q", path, resp.StatusCode, body)

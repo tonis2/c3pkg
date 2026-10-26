@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{if .Title}}{{.Title}} · {{end}}C3 Packages</title>
+  <title>{{if .Title}}{{.Title}} · {{end}}c3pkg</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/css/tokens.css">
   <link rel="stylesheet" href="/static/css/app.css">
@@ -12,12 +12,10 @@
 <body>
   <header class="site-header">
     <div class="container">
-      <a class="wordmark" href="/">C3<span class="badge">.c3l</span></a>
-      {{if not .NoHeaderSearch}}
-      <form action="/search" method="get" class="header-search" role="search">
-        <c3-search><input name="q" type="search" placeholder="Search packages" autocomplete="off" aria-label="Search packages"></c3-search>
+      <a class="wordmark" href="/">c3pkg</a>
+      <form action="/" method="get" class="header-search" role="search">
+        <c3-search><input name="q" type="search" value="{{.SearchQ}}" placeholder="Search packages" autocomplete="off" aria-label="Search packages"></c3-search>
       </form>
-      {{end}}
       <nav>
         <a href="/">Packages</a>
         <a href="/docs/api">API</a>
@@ -37,6 +35,6 @@
   </header>
   {{if and (not .User) (not .NoLoginDialog)}}<c3-login-dialog csrf="{{.CSRF}}"{{if .GitHub}} github{{end}}></c3-login-dialog>{{end}}
   <main><div class="container">{{template "content" .}}</div></main>
-  <footer class="site-footer"><div class="container">C3 Packages — share <span class="mono">.c3l</span> libraries.</div></footer>
+  <footer class="site-footer"><div class="container">c3pkg — share <span class="mono">.c3l</span> libraries.</div></footer>
 </body>
 </html>{{end}}

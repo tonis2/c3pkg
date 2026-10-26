@@ -26,34 +26,40 @@ func TestHomeSearchAndSort(t *testing.T) {
 	publish(t, alice, "http", "1.0.0", "HTTP client", "net, parsing")
 
 	_, home := anon.get("/")
-	for _, want := range []string{"3</dd><dt>packages", "Vulkan bindings", "JSON parser", "HTTP client", `href="/search?tag=parsing"`, "Most downloaded", "Top rated"} {
+	for _, want := range []string{"<h1>Packages</h1>", "Vulkan bindings", "JSON parser", "HTTP client", `href="/?tag=parsing"`, "Most downloaded", "Top rated"} {
 		if !strings.Contains(home, want) {
 			t.Errorf("home missing %q", want)
 		}
+	}
+	if strings.Contains(home, "Popular tags") || strings.Count(home, `type="search"`) != 1 {
+		t.Error("home should only have the navbar search")
 	}
 	// newest first by default
 	if strings.Index(home, "HTTP client") > strings.Index(home, "Vulkan bindings") {
 		t.Error("default order should be latest first")
 	}
 
-	_, res := anon.get("/search?q=vulkan")
+	_, res := anon.get("/?q=vulkan")
 	if !strings.Contains(res, "Vulkan bindings") || strings.Contains(res, "JSON parser") || !strings.Contains(res, "1 result") {
 		t.Error("search results wrong")
 	}
-	if _, res := anon.get("/search?tag=parsing"); !strings.Contains(res, "JSON parser") || !strings.Contains(res, "HTTP client") || strings.Contains(res, "Vulkan bindings") {
+	if _, res := anon.get("/?tag=parsing"); !strings.Contains(res, "JSON parser") || !strings.Contains(res, "HTTP client") || strings.Contains(res, "Vulkan bindings") {
 		t.Error("tag filter wrong")
 	}
-	if _, res := anon.get("/search?q=zzz"); !strings.Contains(res, "Nothing matches") {
+	if _, res := anon.get("/?q=zzz"); !strings.Contains(res, "Nothing matches") {
 		t.Error("empty result state missing")
 	}
+	if resp, _ := anon.get("/search?q=vulkan&sort=stars"); resp.StatusCode != 301 || resp.Header.Get("Location") != "/?q=vulkan&sort=stars" {
+		t.Errorf("/search should redirect to /, got %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
 	// hostile queries and bad params never break the page
-	for _, q := range []string{`/search?q=%22`, `/search?q=a+OR`, `/search?page=abc`, `/search?page=-3`, `/search?sort=drop+table`, `/search?page=99999`} {
+	for _, q := range []string{`/?q=%22`, `/?q=a+OR`, `/?page=abc`, `/?page=-3`, `/?sort=drop+table`, `/?page=99999`} {
 		if resp, _ := anon.get(q); resp.StatusCode != 200 {
 			t.Errorf("%s: %d", q, resp.StatusCode)
 		}
 	}
 	// XSS in the query is escaped
-	if _, res := anon.get(`/search?q=%3Cscript%3Ealert(1)%3C/script%3E`); strings.Contains(res, "<script>alert") {
+	if _, res := anon.get(`/?q=%3Cscript%3Ealert(1)%3C/script%3E`); strings.Contains(res, "<script>alert") {
 		t.Error("query reflected unescaped")
 	}
 
@@ -62,12 +68,12 @@ func TestHomeSearchAndSort(t *testing.T) {
 		anon.get("/packages/json/1.0.0/download")
 	}
 	anon.get("/packages/vk/1.0.0/download")
-	_, res = anon.get("/search?sort=downloads")
+	_, res = anon.get("/?sort=downloads")
 	if strings.Index(res, "JSON parser") > strings.Index(res, "Vulkan bindings") || strings.Index(res, "Vulkan bindings") > strings.Index(res, "HTTP client") {
 		t.Error("most downloaded order wrong")
 	}
 	alice.post("/packages/vk/star", nil, true)
-	_, res = alice.get("/search?sort=stars")
+	_, res = alice.get("/?sort=stars")
 	if strings.Index(res, "Vulkan bindings") > strings.Index(res, "JSON parser") {
 		t.Error("top rated order wrong")
 	}
@@ -87,7 +93,7 @@ func TestPagination(t *testing.T) {
 	if !strings.Contains(p1, "Next →") || strings.Contains(p1, "← Newer") || strings.Count(p1, `class="card pkg-card"`) != 20 {
 		t.Errorf("page 1: cards=%d", strings.Count(p1, `class="card pkg-card"`))
 	}
-	_, p2 := anon.get("/search?page=2")
+	_, p2 := anon.get("/?page=2")
 	if strings.Contains(p2, "Next →") || !strings.Contains(p2, "← Newer") || strings.Count(p2, `class="card pkg-card"`) != 3 {
 		t.Errorf("page 2: cards=%d", strings.Count(p2, `class="card pkg-card"`))
 	}

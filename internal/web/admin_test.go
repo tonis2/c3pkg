@@ -73,7 +73,7 @@ func TestReportAndModerate(t *testing.T) {
 	if r := e.do("GET", "/index/badlib/list", "", nil, ""); r.StatusCode != 404 {
 		t.Errorf("removed package index: %d", r.StatusCode)
 	}
-	if _, home := anon.get("/search?q=suspicious"); !strings.Contains(home, "Nothing matches") {
+	if _, home := anon.get("/?q=suspicious"); !strings.Contains(home, "Nothing matches") {
 		t.Error("removed package still searchable")
 	}
 	if _, dash := owner.get("/dashboard"); strings.Contains(dash, "badlib") {
@@ -95,7 +95,7 @@ func TestReportAndModerate(t *testing.T) {
 	if resp, _ := anon.get("/packages/badlib"); resp.StatusCode != 200 {
 		t.Errorf("restored package: %d", resp.StatusCode)
 	}
-	if _, res := anon.get("/search?q=suspicious"); !strings.Contains(res, "Suspicious library") {
+	if _, res := anon.get("/?q=suspicious"); !strings.Contains(res, "Suspicious library") {
 		t.Error("restored package not searchable")
 	}
 	if resp, _ := admin.post("/admin/packages/ghost/remove", nil, true); resp.StatusCode != 404 {
