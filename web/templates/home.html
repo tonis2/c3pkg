@@ -1,0 +1,51 @@
+{{define "content"}}{{with .Data}}
+{{if .Home}}
+<section class="card hero">
+  <h1>Find and share C3 libraries</h1>
+  <p class="muted">Discover <span class="mono">.c3l</span> packages made by the community, or publish your own.</p>
+  <form action="/search" method="get" class="searchbar" role="search">
+    <c3-search>
+      <input name="q" type="search" placeholder="Search packages" autocomplete="off" aria-label="Search packages" autofocus>
+    </c3-search>
+    <button class="btn btn-primary" type="submit">Search</button>
+  </form>
+  <dl class="stats">
+    <div><dd>{{.Stats.Packages}}</dd><dt>packages</dt></div>
+    <div><dd>{{.Stats.Downloads}}</dd><dt>downloads</dt></div>
+    <div><dd>{{.Stats.Users}}</dd><dt>authors</dt></div>
+  </dl>
+  {{if .Tags}}<div class="tags"><span class="muted">Popular tags</span>{{range .Tags}}<a class="chip" href="/search?tag={{.Tag}}">{{.Tag}} <span class="muted">{{.Count}}</span></a>{{end}}</div>{{end}}
+</section>
+{{else}}
+<section class="card">
+  <form action="/search" method="get" class="searchbar" role="search">
+    <c3-search>
+      <input name="q" type="search" value="{{.Q}}" placeholder="Search packages" autocomplete="off" aria-label="Search packages">
+    </c3-search>
+    {{if .Tag}}<input type="hidden" name="tag" value="{{.Tag}}">{{end}}
+    <button class="btn btn-primary" type="submit">Search</button>
+  </form>
+  <p class="muted">{{.Total}} result{{if ne .Total 1}}s{{end}}{{with .Q}} for “{{.}}”{{end}}{{with .Tag}} tagged <span class="chip">{{.}}</span> <a href="{{if $.Data.Q}}/search?q={{$.Data.Q}}{{else}}/{{end}}">clear</a>{{end}}</p>
+</section>
+{{end}}
+
+<div class="split stack-top">
+  <h2>{{if .Home}}Packages{{else}}Results{{end}}</h2>
+  <div class="seg" role="group" aria-label="Sort packages">
+    {{range .SortLinks}}<a href="{{.URL}}" class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+  </div>
+</div>
+
+{{if .Packages}}
+<div class="grid">
+  {{range .Packages}}{{template "package_card" .}}{{end}}
+</div>
+<nav class="pager">
+  {{if .PrevURL}}<a class="btn" href="{{.PrevURL}}">← Newer</a>{{else}}<span></span>{{end}}
+  <span class="muted">Page {{.Page}}</span>
+  {{if .NextURL}}<a class="btn" href="{{.NextURL}}">Next →</a>{{else}}<span></span>{{end}}
+</nav>
+{{else}}
+<section class="card"><p class="muted">{{if .Home}}No packages have been published yet. <a href="/dashboard/packages/new">Publish the first one.</a>{{else}}Nothing matches your search.{{end}}</p></section>
+{{end}}
+{{end}}{{end}}

@@ -1,0 +1,17 @@
+/* Design tokens, mirrored from the "C3 Tokens" collection in website.fig. */
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-raised: #1f2630;
+  --border: #2a323d;
+  --text: #e6edf3;
+  --text-muted: #8b98a5;
+  --accent: #3da5f4;
+  --accent-hover: #6bbbf7;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --radius-card: 10px;
+  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}

@@ -1,0 +1,99 @@
+{{define "file_field"}}
+<div class="field {{if .Errors.file}}has-error{{end}}">
+  <label for="file">Library file (.c3l)</label>
+  <c3-upload max-mb="{{.Data.MaxMB}}"><input id="file" name="file" type="file" accept=".c3l" required></c3-upload>
+  <p class="hint">A zip with <span class="mono">manifest.json</span> at its root. Up to {{.Data.MaxMB}} MB.</p>
+  {{with .Errors.file}}<p class="error">{{.}}</p>{{end}}
+</div>
+{{end}}
+
+{{define "version_fields"}}
+<div class="row">
+  <div class="field grow {{if .Errors.version}}has-error{{end}}">
+    <label for="version">Version</label>
+    <input id="version" name="version" placeholder="1.0.0" required value="{{.Form.version}}">
+    {{with .Errors.version}}<p class="error">{{.}}</p>{{end}}
+  </div>
+  <div class="field grow {{if .Errors.c3_version}}has-error{{end}}">
+    <label for="c3_version">Supported C3 version</label>
+    <input id="c3_version" name="c3_version" placeholder="0.7.5" required value="{{.Form.c3_version}}">
+    {{with .Errors.c3_version}}<p class="error">{{.}}</p>{{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "meta_fields"}}
+<div class="field {{if .Errors.description}}has-error{{end}}">
+  <label for="description">Description</label>
+  <input id="description" name="description" maxlength="280" required value="{{.Form.description}}">
+  {{with .Errors.description}}<p class="error">{{.}}</p>{{end}}
+</div>
+<div class="field {{if .Errors.tags}}has-error{{end}}">
+  <label for="tags">Tags</label>
+  <input id="tags" name="tags" placeholder="gpu, vulkan, math" value="{{.Form.tags}}">
+  <p class="hint">Up to 5, separated by commas.</p>
+  {{with .Errors.tags}}<p class="error">{{.}}</p>{{end}}
+</div>
+<div class="field {{if .Errors.license}}has-error{{end}}">
+  <label for="license">License</label>
+  <input id="license" name="license" placeholder="MIT" value="{{.Form.license}}">
+  {{with .Errors.license}}<p class="error">{{.}}</p>{{end}}
+</div>
+<div class="row">
+  <div class="field grow {{if .Errors.docs_url}}has-error{{end}}">
+    <label for="docs_url">Documentation URL</label>
+    <input id="docs_url" name="docs_url" type="url" placeholder="https://" value="{{.Form.docs_url}}">
+    {{with .Errors.docs_url}}<p class="error">{{.}}</p>{{end}}
+  </div>
+  <div class="field grow {{if .Errors.git_url}}has-error{{end}}">
+    <label for="git_url">Repository URL</label>
+    <input id="git_url" name="git_url" type="url" placeholder="https://github.com/…" value="{{.Form.git_url}}">
+    {{with .Errors.git_url}}<p class="error">{{.}}</p>{{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "readme_field"}}
+<div class="field {{if .Errors.readme}}has-error{{end}}">
+  <label for="readme">README (Markdown)</label>
+  <input id="readme" name="readme" type="file" accept=".md,.markdown,text/markdown,text/plain">
+  <p class="hint">Optional, up to 512 KB. You can replace it later without publishing a new version.</p>
+  {{with .Errors.readme}}<p class="error">{{.}}</p>{{end}}
+</div>
+{{end}}
+
+{{define "package_list"}}
+{{if .}}
+<div class="table-scroll"><table class="table">
+  <thead><tr><th>Package</th><th>Latest</th><th>C3</th><th>Downloads</th><th>Updated</th></tr></thead>
+  <tbody>
+  {{range .}}
+    <tr>
+      <td><a class="mono" href="/packages/{{.Name}}">{{.Name}}</a><div class="muted small">{{.Description}}</div></td>
+      <td class="mono">{{if .Latest}}{{.Latest}}{{else}}–{{end}}</td>
+      <td class="mono">{{.C3Version}}</td>
+      <td>{{.Downloads}}</td>
+      <td>{{ago .UpdatedAt}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table></div>
+{{end}}
+{{end}}
+
+{{define "package_card"}}
+<article class="card pkg-card">
+  <div class="pkg-card-head">
+    <a class="mono pkg-name" href="/packages/{{.Name}}">{{.Name}}</a>
+    {{if .Latest}}<span class="version-badge mono">{{.Latest}}</span>{{end}}
+  </div>
+  <p class="pkg-desc">{{.Description}}</p>
+  {{if .Tags}}<div class="tags">{{range .Tags}}<a class="chip" href="/search?tag={{.}}">{{.}}</a>{{end}}</div>{{end}}
+  <div class="pkg-meta muted small">
+    <span title="Downloads">{{.Downloads}} downloads</span>
+    <span title="Stars">★ {{.Stars}}</span>
+    {{if .C3Version}}<span>C3 {{.C3Version}}</span>{{end}}
+    <span>{{ago .UpdatedAt}}</span>
+  </div>
+</article>
+{{end}}

@@ -1,0 +1,82 @@
+{{define "content"}}
+<h1>Settings</h1>
+{{with .Flash}}<p class="flash">{{.}}</p>{{end}}
+
+<section class="card stack-top">
+  <h2>Profile</h2>
+  <form method="post" action="/settings/profile" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field"><label>Email</label><input value="{{.User.Email}}" disabled></div>
+    <div class="field {{if .Errors.name}}has-error{{end}}">
+      <label for="name">Name</label>
+      <input id="name" name="name" value="{{.Form.name}}" required>
+      {{with .Errors.name}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.github_login}}has-error{{end}}">
+      <label for="github_login">GitHub username</label>
+      <input id="github_login" name="github_login" value="{{.Form.github_login}}">
+      {{with .Errors.github_login}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.bio}}has-error{{end}}">
+      <label for="bio">Bio</label>
+      <textarea id="bio" name="bio" rows="3">{{.Form.bio}}</textarea>
+      {{with .Errors.bio}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <button class="btn btn-primary" type="submit">Save profile</button>
+  </form>
+  {{if .Data.GitHubReady}}
+    <p class="muted">
+      {{if .User.GitHubID}}GitHub account <span class="mono">{{.User.GitHubLogin}}</span> is linked for sign-in.
+      {{else}}<a href="/auth/github/login">Link a GitHub account</a> for sign-in.{{end}}
+    </p>
+  {{end}}
+</section>
+
+<section class="card stack-top">
+  <h2>{{if .User.PasswordHash}}Change password{{else}}Set a password{{end}}</h2>
+  <form method="post" action="/settings/password" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{if .User.PasswordHash}}
+    <div class="field {{if .Errors.current}}has-error{{end}}">
+      <label for="current">Current password</label>
+      <input id="current" name="current" type="password" autocomplete="current-password">
+      {{with .Errors.current}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    {{end}}
+    <div class="field {{if .Errors.password}}has-error{{end}}">
+      <label for="password">New password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password">
+      {{with .Errors.password}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.confirm}}has-error{{end}}">
+      <label for="confirm">Confirm new password</label>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password">
+      {{with .Errors.confirm}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <button class="btn" type="submit">Update password</button>
+  </form>
+</section>
+
+<section class="card stack-top">
+  <h2>API tokens</h2>
+  <p class="muted">Tokens let the command line publish and fetch packages on your behalf.</p>
+  {{with .Data.NewToken}}<p class="token mono">{{.}}</p>{{end}}
+  <form method="post" action="/settings/tokens" class="row" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field grow {{if .Errors.token_name}}has-error{{end}}">
+      <label for="token_name">Token name</label>
+      <input id="token_name" name="name" placeholder="e.g. laptop">
+      {{with .Errors.token_name}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <button class="btn" type="submit">Create token</button>
+  </form>
+  {{range .Data.Tokens}}
+  <form method="post" action="/settings/tokens/{{.ID}}/revoke" class="token-row">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <span>{{.Name}}</span>
+    <span class="muted">{{if .LastUsedAt}}last used {{.LastUsedAt}}{{else}}never used{{end}}</span>
+    <button class="btn" type="submit">Revoke</button>
+  </form>
+  {{end}}
+</section>
+{{end}}

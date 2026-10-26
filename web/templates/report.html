@@ -1,0 +1,16 @@
+{{define "content"}}
+<section class="card form-card">
+  <h1>Report <span class="mono">{{.Data.Name}}</span></h1>
+  <p class="muted">Tell the moderators what is wrong, for example malware, spam, a licence violation or a name squat.</p>
+  <form method="post" action="/packages/{{.Data.Name}}/report" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field {{if .Errors.reason}}has-error{{end}}">
+      <label for="reason">Reason</label>
+      <textarea id="reason" name="reason" rows="6" required>{{.Form.reason}}</textarea>
+      {{with .Errors.reason}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <button class="btn btn-primary" type="submit">Send report</button>
+    <a class="btn" href="/packages/{{.Data.Name}}">Cancel</a>
+  </form>
+</section>
+{{end}}

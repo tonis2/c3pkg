@@ -1,0 +1,3 @@
+# Nightly snapshot of the c3pkg database and uploads, kept on this host under /srv/c3pkg/backups.
+# The database snapshot is consistent while the site is running; uploads never change once written.
+15 3 * * * root docker exec c3pkg /c3pkg backup /backups >>/var/log/c3pkg-backup.log 2>&1 && mkdir -p /srv/c3pkg/backups/uploads && cp -a --update=none /srv/c3pkg/data/uploads/. /srv/c3pkg/backups/uploads/ >>/var/log/c3pkg-backup.log 2>&1

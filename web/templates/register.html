@@ -1,0 +1,36 @@
+{{define "content"}}
+<section class="card auth-card">
+  <h1>Create your account</h1>
+  <form method="post" action="/register" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="field {{if .Errors.email}}has-error{{end}}">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required value="{{.Form.email}}">
+      {{with .Errors.email}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.login}}has-error{{end}}">
+      <label for="login">Username</label>
+      <input id="login" name="login" autocomplete="username" required value="{{.Form.login}}">
+      {{with .Errors.login}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.name}}has-error{{end}}">
+      <label for="name">Name</label>
+      <input id="name" name="name" autocomplete="name" required value="{{.Form.name}}">
+      {{with .Errors.name}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.password}}has-error{{end}}">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" required>
+      {{with .Errors.password}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <div class="field {{if .Errors.confirm}}has-error{{end}}">
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password" required>
+      {{with .Errors.confirm}}<p class="error">{{.}}</p>{{end}}
+    </div>
+    <button class="btn btn-primary wide" type="submit">Create account</button>
+  </form>
+  {{if .Data}}<p class="or">or</p><a class="btn wide" href="/auth/github/login">Continue with GitHub</a>{{end}}
+  <p class="muted">Have an account? <a href="/login">Log in</a></p>
+</section>
+{{end}}

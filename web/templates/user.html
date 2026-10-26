@@ -1,0 +1,12 @@
+{{define "content"}}
+<section class="card">
+  <h1>{{.Data.Profile.Name}} <span class="muted mono">@{{.Data.Profile.Login}}</span></h1>
+  {{with .Data.Profile.Bio}}<p>{{.}}</p>{{end}}
+  {{with .Data.Profile.GitHubLogin}}<p><a href="https://github.com/{{.}}" rel="nofollow noopener">github.com/{{.}}</a></p>{{end}}
+  <p class="muted">Member since {{date .Data.Profile.CreatedAt}}</p>
+</section>
+<section class="card stack-top">
+  <h2>Packages</h2>
+  {{if .Data.Packages}}{{template "package_list" .Data.Packages}}{{else}}<p class="muted">No packages yet.</p>{{end}}
+</section>
+{{end}}

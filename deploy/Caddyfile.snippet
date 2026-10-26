@@ -1,0 +1,8 @@
+https://www.c3pkg.eu {
+    encode zstd gzip
+    # a .c3l upload is capped at C3PKG_MAX_UPLOAD_MB (20) plus the form fields
+    request_body {
+        max_size 25MB
+    }
+    reverse_proxy http://10.20.0.10:8080
+}

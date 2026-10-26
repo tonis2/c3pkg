@@ -1,0 +1,72 @@
+{{define "content"}}
+<div class="docs">
+<h1>API &amp; publishing from the command line</h1>
+<p class="muted">Everything the website does is available over a JSON API, so you can publish from scripts and CI.</p>
+
+<section class="card stack-top">
+  <h2>Authentication</h2>
+  <p>Create a token under <a href="/settings">Settings → API tokens</a> and send it as a bearer token. Tokens are shown once; keep them secret and revoke any you lose.</p>
+  <pre><code>export C3PKG_TOKEN=c3p_…
+curl -H "Authorization: Bearer $C3PKG_TOKEN" {{.Base}}/api/v1/me</code></pre>
+  <p>Errors are JSON: <span class="mono">{"error": "…", "errors": {"field": "message"}}</span>. Requests are rate limited; on <span class="mono">429</span> wait for the <span class="mono">Retry-After</span> seconds.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Publish a library</h2>
+  <p>A <span class="mono">.c3l</span> is a zip with <span class="mono">manifest.json</span> at its root. The package name is the manifest's <span class="mono">provides</span>, and it must match the name in the URL. Versions are <a href="https://semver.org">semver</a> (<span class="mono">1.2.3</span> or <span class="mono">1.2.3-rc.1</span>) and can never be changed once published.</p>
+  <pre><code># new package: description is required the first time
+curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
+  -F file=@vk.c3l -F c3_version=0.7.5 \
+  -F description="Vulkan bindings for C3" -F tags="gpu,vulkan" -F license=MIT \
+  {{.Base}}/api/v1/packages/vk/versions/1.0.0
+
+# a new version of a package you own
+curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
+  -F file=@vk.c3l -F c3_version=0.7.5 \
+  {{.Base}}/api/v1/packages/vk/versions/1.0.1</code></pre>
+  <p>Optional form fields for a new package: <span class="mono">license</span>, <span class="mono">docs_url</span>, <span class="mono">git_url</span> and a <span class="mono">readme</span> file. Success returns <span class="mono">201</span> with <span class="mono">{"name", "version", "created", "url"}</span>.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Endpoints</h2>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>Method and path</th><th>What it does</th><th>Auth</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET /api/v1/packages</td><td>List or search. Query: <span class="mono">q</span>, <span class="mono">tag</span>, <span class="mono">sort</span> (latest, downloads, stars), <span class="mono">page</span>, <span class="mono">per_page</span> (max 100)</td><td>–</td></tr>
+      <tr><td class="mono">GET /api/v1/packages/{name}</td><td>Metadata, README (Markdown) and all versions</td><td>–</td></tr>
+      <tr><td class="mono">GET /api/v1/packages/{name}/versions</td><td>Versions with checksums, sizes and yank state</td><td>–</td></tr>
+      <tr><td class="mono">GET /api/v1/packages/{name}/{version}/download</td><td>The <span class="mono">.c3l</span> file (counts as a download)</td><td>–</td></tr>
+      <tr><td class="mono">PUT /api/v1/packages/{name}/versions/{version}</td><td>Publish a version (multipart, see above)</td><td>token</td></tr>
+      <tr><td class="mono">PUT / DELETE …/versions/{version}/yank</td><td>Yank or restore a version</td><td>owner</td></tr>
+      <tr><td class="mono">PATCH /api/v1/packages/{name}</td><td>JSON with any of <span class="mono">description, tags[], license, docs_url, git_url</span></td><td>owner</td></tr>
+      <tr><td class="mono">PUT /api/v1/packages/{name}/readme</td><td>Body: the README as Markdown (max 512 KB)</td><td>owner</td></tr>
+      <tr><td class="mono">PUT / DELETE /api/v1/packages/{name}/star</td><td>Star or unstar; returns the new count</td><td>token</td></tr>
+      <tr><td class="mono">GET /api/v1/users/{login}</td><td>Public profile and packages</td><td>–</td></tr>
+      <tr><td class="mono">GET / PATCH /api/v1/me</td><td>Your account; patch <span class="mono">name, bio, github</span></td><td>token</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card stack-top">
+  <h2>Package index (for build tools)</h2>
+  <p>Plain, cache-friendly endpoints a package manager can use to resolve and fetch versions, in the style of the Go module proxy.</p>
+  <div class="table-scroll"><table class="table">
+    <tbody>
+      <tr><td class="mono">GET /index/{name}/list</td><td>One version per line, newest first, yanked versions left out</td></tr>
+      <tr><td class="mono">GET /index/{name}/{version}.json</td><td>C3 version, platforms, size, checksums, yanked flag</td></tr>
+      <tr><td class="mono">GET /index/{name}/{version}.c3l</td><td>The library file</td></tr>
+    </tbody>
+  </table></div>
+  <p>Yanked versions are not listed but can still be fetched by exact version, so existing builds keep working.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Checksums</h2>
+  <p>Each version has two SHA-256 values. <span class="mono">sha256_file</span> is the hash of the uploaded <span class="mono">.c3l</span>. <span class="mono">sha256_tree</span> hashes the contents, ignoring zip metadata, so a zipped library and its unpacked directory give the same value:</p>
+  <pre><code>cd unpacked-library
+find . -type f | sed 's|^\./||' | LC_ALL=C sort \
+  | while read f; do echo "$(sha256sum "$f" | cut -c1-64)  $f"; done \
+  | sha256sum</code></pre>
+</section>
+</div>
+{{end}}

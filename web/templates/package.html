@@ -1,0 +1,107 @@
+{{define "content"}}
+{{with .Data}}
+{{$p := .Pkg}}{{$tab := .Tab}}
+<section class="card">
+  <div class="pkg-title">
+    <h1 class="mono">{{$p.Name}}</h1>
+    {{with .Latest}}<span class="version-badge mono">{{.Version}}</span>{{end}}
+  </div>
+  <p>{{$p.Meta.Description}}</p>
+  {{if $p.Meta.Tags}}<div class="tags">{{range $p.Meta.Tags}}<span class="chip">{{.}}</span>{{end}}</div>{{end}}
+</section>
+
+<nav class="tabs">
+  <a href="/packages/{{$p.Name}}" class="{{if eq $tab "readme"}}active{{end}}">Readme</a>
+  <a href="/packages/{{$p.Name}}/versions" class="{{if eq $tab "versions"}}active{{end}}">Versions <span class="muted">({{len .Versions}})</span></a>
+</nav>
+
+<div class="pkg-layout">
+  <div class="pkg-main">
+  {{if eq $tab "readme"}}
+    <section class="card">
+      {{if .Readme}}<div class="readme">{{.Readme}}</div>
+      {{else}}<p class="muted">The author has not added a README yet.</p>{{end}}
+    </section>
+  {{else if eq $tab "versions"}}
+    <section class="card">
+      <div class="table-scroll"><table class="table">
+        <thead><tr><th>Version</th><th>C3</th><th>Size</th><th>Downloads</th><th>Published</th><th></th></tr></thead>
+        <tbody>
+        {{range .Versions}}
+          <tr>
+            <td class="mono">{{.Version}}{{if .Yanked}} <span class="chip chip-warn">yanked</span>{{end}}</td>
+            <td class="mono">{{.C3Version}}</td>
+            <td>{{size .Size}}</td>
+            <td>{{index $.Data.VersionDownloads .ID}}</td>
+            <td>{{date .CreatedAt}}</td>
+            <td class="actions">
+              <a class="btn" href="/packages/{{$p.Name}}/{{.Version}}/download">Download</a>
+              {{if $.Data.IsOwner}}
+              <form method="post" class="inline" action="/dashboard/packages/{{$p.Name}}/versions/{{.Version}}/{{if .Yanked}}unyank{{else}}yank{{end}}">
+                <input type="hidden" name="csrf" value="{{$.CSRF}}">
+                <button class="btn" type="submit">{{if .Yanked}}Restore{{else}}Yank{{end}}</button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table></div>
+      <p class="muted small">Yanked versions are hidden from new installs but stay downloadable by exact version.</p>
+    </section>
+  {{end}}
+  </div>
+
+  <aside class="pkg-side">
+    {{if .IsOwner}}
+    <section class="card">
+      <a class="btn btn-primary wide" href="/dashboard/packages/{{$p.Name}}/publish">Publish update</a>
+      <a class="btn wide stack-top" href="/dashboard/packages/{{$p.Name}}/edit">Edit package</a>
+    </section>
+    {{end}}
+    <section class="card">
+      {{with .Latest}}<a class="btn btn-primary wide" href="/packages/{{$p.Name}}/{{.Version}}/download">Download {{.Version}} (.c3l)</a>
+      {{else}}<p class="muted">Every version has been yanked.</p>{{end}}
+      <dl class="meta">
+        <dt>Last updated</dt><dd>{{ago $p.UpdatedAt}}</dd>
+        {{with .Latest}}
+        <dt>Supported C3</dt><dd class="mono">{{.C3Version}}</dd>
+        <dt>Package size</dt><dd>{{size .Size}}</dd>
+        {{if .Targets}}<dt>Platforms</dt><dd>{{join .Targets ", "}}</dd>{{end}}
+        <dt>SHA-256 (files)</dt><dd class="mono hash" title="{{.SHA256Tree}}">{{.SHA256Tree}}</dd>
+        {{end}}
+        {{with $p.Meta.License}}<dt>License</dt><dd>{{.}}</dd>{{end}}
+        <dt>Downloads</dt><dd>{{$p.Downloads}}</dd>
+      </dl>
+      {{if .SparkTotal}}<svg class="spark" viewBox="0 0 300 40" role="img" aria-label="Downloads over the last 30 days">{{range .Spark}}<rect x="{{.X}}" y="{{.Y}}" width="8" height="{{.H}}" rx="1"/>{{end}}</svg>{{end}}
+      <p class="muted small">{{.SparkTotal}} downloads in the last 30 days</p>
+      {{if $.User}}
+      <c3-star-button>
+        <form method="post" action="/packages/{{$p.Name}}/{{if .Starred}}unstar{{else}}star{{end}}" class="stack-top">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <button class="btn wide" type="submit" aria-pressed="{{.Starred}}">{{if .Starred}}★ Starred{{else}}☆ Star{{end}} · {{$p.Stars}}</button>
+        </form>
+      </c3-star-button>
+      {{else}}
+      <a class="btn wide stack-top" href="/login?next=/packages/{{$p.Name}}">☆ Star · {{$p.Stars}}</a>
+      {{end}}
+    </section>
+    {{with .Latest}}
+    <section class="card">
+      <h2>Download</h2>
+      <c3-install-box class="install-box"><pre><code>curl -fL -o {{$p.Name}}-{{.Version}}.c3l {{$.Base}}/packages/{{$p.Name}}/{{.Version}}/download</code></pre></c3-install-box>
+    </section>
+    {{end}}
+    <section class="card">
+      <h2>Links</h2>
+      <ul class="links">
+        {{with $p.Meta.DocsURL}}<li><a href="{{.}}" rel="nofollow noopener">Documentation</a></li>{{end}}
+        {{with $p.Meta.GitURL}}<li><a href="{{.}}" rel="nofollow noopener">Repository</a></li>{{end}}
+        <li><a href="/users/{{$p.OwnerLogin}}">Owner: {{$p.OwnerName}} (@{{$p.OwnerLogin}})</a></li>
+        <li><a class="muted" href="/packages/{{$p.Name}}/report">Report this package</a></li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{{end}}
+{{end}}

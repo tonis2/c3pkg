@@ -1,0 +1,42 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Title}}{{.Title}} · {{end}}C3 Packages</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script type="module" src="/static/js/app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="wordmark" href="/">C3<span class="badge">.c3l</span></a>
+      {{if not .NoHeaderSearch}}
+      <form action="/search" method="get" class="header-search" role="search">
+        <c3-search><input name="q" type="search" placeholder="Search packages" autocomplete="off" aria-label="Search packages"></c3-search>
+      </form>
+      {{end}}
+      <nav>
+        <a href="/">Packages</a>
+        <a href="/docs/api">API</a>
+        {{if .User}}
+          <a href="/dashboard">{{.User.Name}}</a>
+          <a href="/settings">Settings</a>
+          <form method="post" action="/logout" class="inline">
+            <input type="hidden" name="csrf" value="{{.CSRF}}">
+            <button class="btn" type="submit">Log out</button>
+          </form>
+        {{else}}
+          <a class="btn" href="/login">Log in</a>
+          <a class="btn btn-primary" href="/register">Register</a>
+        {{end}}
+      </nav>
+    </div>
+  </header>
+  {{if and (not .User) (not .NoLoginDialog)}}<c3-login-dialog csrf="{{.CSRF}}"{{if .GitHub}} github{{end}}></c3-login-dialog>{{end}}
+  <main><div class="container">{{template "content" .}}</div></main>
+  <footer class="site-footer"><div class="container">C3 Packages — share <span class="mono">.c3l</span> libraries.</div></footer>
+</body>
+</html>{{end}}

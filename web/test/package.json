@@ -1,0 +1,8 @@
+{
+  "name": "c3pkg-browser-tests",
+  "private": true,
+  "type": "module",
+  "description": "Browser tests for the Lit components. Not part of the Docker image.",
+  "scripts": { "test": "node --test e2e.test.mjs" },
+  "devDependencies": { "playwright-core": "1.49.1" }
+}

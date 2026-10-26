@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.env.example
+data
+*.db
+*.db-*
+web/test
+design
+docs
+*.md

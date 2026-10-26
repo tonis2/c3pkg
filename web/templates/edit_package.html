@@ -1,0 +1,13 @@
+{{define "content"}}
+<section class="card form-card">
+  <h1>Edit <span class="mono">{{.Data.Pkg.Name}}</span></h1>
+  {{with .Flash}}<p class="flash">{{.}}</p>{{end}}
+  <form method="post" action="/dashboard/packages/{{.Data.Pkg.Name}}/edit" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{template "meta_fields" .}}
+    {{template "readme_field" .}}
+    <button class="btn btn-primary" type="submit">Save changes</button>
+    <a class="btn" href="/packages/{{.Data.Pkg.Name}}">Back to package</a>
+  </form>
+</section>
+{{end}}

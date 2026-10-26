@@ -1,0 +1,6 @@
+data/
+*.db
+*.db-*
+.env
+web/test/node_modules/
+web/test/shots/

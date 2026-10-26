@@ -1,0 +1,34 @@
+{{define "content"}}
+<section class="card">
+  <h1>{{.User.Name}} <span class="muted mono">@{{.User.Login}}</span></h1>
+  {{with .User.Bio}}<p>{{.}}</p>{{end}}
+  <p><a class="btn" href="/settings">Edit profile</a> <a class="btn" href="/users/{{.User.Login}}">View public profile</a></p>
+</section>
+<section class="card stack-top">
+  <div class="split">
+    <h2>My packages</h2>
+    <a class="btn btn-primary" href="/dashboard/packages/new">+ New package</a>
+  </div>
+  {{if .Data}}
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>Package</th><th>Latest</th><th>Downloads</th><th>Updated</th><th></th></tr></thead>
+    <tbody>
+    {{range .Data}}
+      <tr>
+        <td><a class="mono" href="/packages/{{.Name}}">{{.Name}}</a><div class="muted small">{{.Description}}</div></td>
+        <td class="mono">{{if .Latest}}{{.Latest}}{{else}}–{{end}}</td>
+        <td>{{.Downloads}}</td>
+        <td>{{ago .UpdatedAt}}</td>
+        <td class="actions">
+          <a class="btn" href="/dashboard/packages/{{.Name}}/publish">Publish update</a>
+          <a class="btn" href="/dashboard/packages/{{.Name}}/edit">Edit</a>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}
+  <p class="muted">You have not published any packages yet.</p>
+  {{end}}
+</section>
+{{end}}

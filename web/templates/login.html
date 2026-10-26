@@ -1,0 +1,21 @@
+{{define "content"}}
+<section class="card auth-card">
+  <h1>Log in</h1>
+  <form method="post" action="/login" novalidate>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="next" value="{{.Form.next}}">
+    {{with .Errors.form}}<p class="error banner">{{.}}</p>{{end}}
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required value="{{.Form.email}}">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary wide" type="submit">Log in</button>
+  </form>
+  {{if .Data}}<p class="or">or</p><a class="btn wide" href="/auth/github/login">Continue with GitHub</a>{{end}}
+  <p class="muted">New here? <a href="/register">Create an account</a></p>
+</section>
+{{end}}

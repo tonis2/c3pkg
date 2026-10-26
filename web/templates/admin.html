@@ -1,0 +1,75 @@
+{{define "content"}}{{with .Data}}
+<h1>Admin</h1>
+{{with $.Flash}}<p class="flash">{{.}}</p>{{end}}
+
+<section class="card stack-top">
+  <h2>Open reports ({{len .Reports}})</h2>
+  {{if .Reports}}
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>Package</th><th>Reported by</th><th>Reason</th><th></th></tr></thead>
+    <tbody>
+    {{range .Reports}}
+      <tr>
+        <td><a class="mono" href="/packages/{{.PackageName}}">{{.PackageName}}</a></td>
+        <td>@{{.ReporterLogin}}<div class="muted small">{{ago .CreatedAt}}</div></td>
+        <td class="reason">{{.Reason}}</td>
+        <td class="actions">
+          <form method="post" class="inline" action="/admin/reports/{{.ID}}/resolve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn" type="submit">Resolve</button></form>
+          <form method="post" class="inline" action="/admin/packages/{{.PackageName}}/remove"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn btn-danger" type="submit">Remove package</button></form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="muted">Nothing to review.</p>{{end}}
+</section>
+
+<section class="card stack-top">
+  <form method="get" action="/admin" class="row">
+    <div class="field grow"><label for="q">Find packages and users</label><input id="q" name="q" value="{{.Q}}" placeholder="name, login or email"></div>
+    <button class="btn" type="submit">Search</button>
+  </form>
+
+  <h2>Packages</h2>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>Name</th><th>Owner</th><th>Updated</th><th></th></tr></thead>
+    <tbody>
+    {{range .Packages}}
+      <tr>
+        <td class="mono">{{if .Removed}}{{.Name}} <span class="chip chip-warn">removed</span>{{else}}<a href="/packages/{{.Name}}">{{.Name}}</a>{{end}}</td>
+        <td>@{{.Owner}}</td>
+        <td>{{ago .Updated}}</td>
+        <td class="actions">
+          <form method="post" class="inline" action="/admin/packages/{{.Name}}/{{if .Removed}}restore{{else}}remove{{end}}">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="btn" type="submit">{{if .Removed}}Restore{{else}}Remove{{end}}</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+
+  <h2>Users</h2>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>User</th><th>Email</th><th>Joined</th><th></th></tr></thead>
+    <tbody>
+    {{range .Users}}
+      <tr>
+        <td><a href="/users/{{.Login}}">@{{.Login}}</a>{{if .IsAdmin}} <span class="chip">admin</span>{{end}}{{if .Banned}} <span class="chip chip-warn">banned</span>{{end}}</td>
+        <td>{{.Email}}</td>
+        <td>{{date .CreatedAt}}</td>
+        <td class="actions">
+          {{if not .IsAdmin}}
+          <form method="post" class="inline" action="/admin/users/{{.Login}}/{{if .Banned}}unban{{else}}ban{{end}}">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <button class="btn" type="submit">{{if .Banned}}Unban{{else}}Ban{{end}}</button>
+          </form>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+</section>
+{{end}}{{end}}
