@@ -33,7 +33,13 @@ code, pre, .mono { font-family: var(--font-mono); }
 .btn-primary:hover { background: var(--accent-hover); color: #06121d; }
 
 main { padding: 32px 0 64px; min-height: 70vh; }
-.site-footer { border-top: 1px solid var(--border); color: var(--text-muted); padding: 24px 0; font-size: 14px; }
+.site-footer { margin-top: 48px; border-top: 1px solid var(--border); background: var(--surface); padding: 40px 0 48px; }
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 32px; }
+.site-footer h2 { margin: 0 0 16px; font-size: 18px; color: var(--accent); }
+.site-footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.site-footer a { color: var(--text); }
+.site-footer a:hover { color: var(--accent-hover); }
+.site-footer .icon { vertical-align: -2px; margin-right: 8px; }
 
 h1 { font-size: 28px; margin: 0 0 16px; }
 h2 { font-size: 20px; margin: 0 0 12px; }
