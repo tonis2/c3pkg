@@ -158,3 +158,38 @@ func TestPackagesByOwnerAndRemoved(t *testing.T) {
 		t.Errorf("publishing to a removed package: %v", err)
 	}
 }
+
+func TestReadmeSource(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	alice, _ := twoUsers(t, s)
+	readme := func() string { p, _ := s.PackageByName(ctx, "vk"); return p.ReadmeMD }
+	publish := func(version, md, source string) {
+		p := params(alice, "vk", version)
+		p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource = md, "<p>"+md+"</p>", source
+		if _, err := s.PublishVersion(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish("1.0.0", "from zip 1", "zip")
+	publish("1.0.1", "from zip 2", "zip")
+	if readme() != "from zip 2" {
+		t.Errorf("a zip README should refresh on publish, got %q", readme())
+	}
+	publish("1.0.2", "", "")
+	if readme() != "from zip 2" {
+		t.Errorf("an archive without a README keeps the current one, got %q", readme())
+	}
+	p, _ := s.PackageByName(ctx, "vk")
+	if err := s.SetReadme(ctx, p.ID, alice, "by hand", "<p>by hand</p>"); err != nil {
+		t.Fatal(err)
+	}
+	publish("1.0.3", "from zip 3", "zip")
+	if readme() != "by hand" {
+		t.Errorf("a manual README must survive a publish, got %q", readme())
+	}
+	publish("1.0.4", "uploaded with version", "manual")
+	if readme() != "uploaded with version" {
+		t.Errorf("a manual upload always applies, got %q", readme())
+	}
+}

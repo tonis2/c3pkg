@@ -70,17 +70,21 @@ type Summary struct {
 }
 
 type PublishParams struct {
-	UserID               int64
-	Name                 string
-	Version              string
-	C3Version            string
-	Targets              []string
-	Size                 int64
-	SHA256File           string
-	SHA256Tree           string
-	StorageKey           string
-	Meta                 Meta   // applied only when the package is created
-	ReadmeMD, ReadmeHTML string // applied only when the package is created
+	UserID     int64
+	Name       string
+	Version    string
+	C3Version  string
+	Targets    []string
+	Size       int64
+	SHA256File string
+	SHA256Tree string
+	StorageKey string
+	Meta       Meta // applied only when the package is created
+	// The README to apply. Empty ReadmeSource means none. "manual" (uploaded by the user) always
+	// applies; "zip" (taken from the archive) applies to a new package, and to an existing one
+	// unless its owner has uploaded a README by hand.
+	ReadmeMD, ReadmeHTML string
+	ReadmeSource         string
 }
 
 // PublishVersion adds a version, creating the package (owned by UserID) if the name is free.
@@ -93,13 +97,14 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 
 	var pkgID, ownerID int64
 	var removedAt sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT id, owner_id, removed_at FROM packages WHERE name = ?`, p.Name).Scan(&pkgID, &ownerID, &removedAt)
+	var currentSource string
+	err = tx.QueryRowContext(ctx, `SELECT id, owner_id, removed_at, readme_source FROM packages WHERE name = ?`, p.Name).Scan(&pkgID, &ownerID, &removedAt, &currentSource)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		res, ierr := tx.ExecContext(ctx,
-			`INSERT INTO packages(name, name_key, owner_id, description, docs_url, git_url, license, readme_md, readme_html)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			p.Name, pkg.NameKey(p.Name), p.UserID, p.Meta.Description, p.Meta.DocsURL, p.Meta.GitURL, p.Meta.License, p.ReadmeMD, p.ReadmeHTML)
+			`INSERT INTO packages(name, name_key, owner_id, description, docs_url, git_url, license, readme_md, readme_html, readme_source)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			p.Name, pkg.NameKey(p.Name), p.UserID, p.Meta.Description, p.Meta.DocsURL, p.Meta.GitURL, p.Meta.License, p.ReadmeMD, p.ReadmeHTML, readmeSource(p.ReadmeSource))
 		if ierr != nil {
 			if strings.Contains(ierr.Error(), "UNIQUE constraint failed") {
 				return false, ErrNameTaken
@@ -117,6 +122,13 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 		return false, ErrNameTaken
 	case ownerID != p.UserID:
 		return false, ErrNotOwner
+	default:
+		if p.ReadmeSource == "manual" || p.ReadmeSource == "zip" && currentSource != "manual" {
+			if _, err := tx.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = ? WHERE id = ?`,
+				p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource, pkgID); err != nil {
+				return false, err
+			}
+		}
 	}
 
 	targets, _ := json.Marshal(p.Targets)
@@ -136,6 +148,13 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 		return false, err
 	}
 	return created, tx.Commit()
+}
+
+func readmeSource(s string) string {
+	if s == "" {
+		return "zip"
+	}
+	return s
 }
 
 type execer interface {
@@ -303,8 +322,9 @@ func (s *Store) UpdateMetadata(ctx context.Context, pkgID, userID int64, m Meta)
 	return tx.Commit()
 }
 
+// SetReadme stores a README uploaded by the owner; later publishes will not replace it.
 func (s *Store) SetReadme(ctx context.Context, pkgID, userID int64, md, html string) error {
-	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ? WHERE id = ? AND owner_id = ? AND removed_at IS NULL`, md, html, pkgID, userID)
+	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = 'manual' WHERE id = ? AND owner_id = ? AND removed_at IS NULL`, md, html, pkgID, userID)
 	if err != nil {
 		return err
 	}

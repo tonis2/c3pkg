@@ -38,17 +38,17 @@ type Server struct {
 
 // pageData is what every template receives.
 type pageData struct {
-	Title          string
-	SearchQ        string // prefills the navbar search box
-	NoLoginDialog  bool   // the page is itself a login/register form
-	GitHub         bool   // GitHub login is configured
-	Base           string // public base URL, for absolute links in copyable commands
-	User           *store.User
-	CSRF           string
-	Errors         map[string]string
-	Form           map[string]string
-	Flash          string
-	Data           any
+	Title         string
+	SearchQ       string // prefills the navbar search box
+	NoLoginDialog bool   // the page is itself a login/register form
+	GitHub        bool   // GitHub login is configured
+	Base          string // public base URL, for absolute links in copyable commands
+	User          *store.User
+	CSRF          string
+	Errors        map[string]string
+	Form          map[string]string
+	Flash         string
+	Data          any
 }
 
 type ctxKey int

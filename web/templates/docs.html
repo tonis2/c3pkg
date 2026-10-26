@@ -24,7 +24,7 @@ curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
 curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
   -F file=@vk.c3l -F c3_version=0.7.5 \
   {{.Base}}/api/v1/packages/vk/versions/1.0.1</code></pre>
-  <p>Optional form fields for a new package: <span class="mono">license</span>, <span class="mono">docs_url</span>, <span class="mono">git_url</span> and a <span class="mono">readme</span> file. Success returns <span class="mono">201</span> with <span class="mono">{"name", "version", "created", "url"}</span>.</p>
+  <p>Optional form fields for a new package: <span class="mono">license</span>, <span class="mono">docs_url</span>, <span class="mono">git_url</span> and a <span class="mono">readme</span> file. Without one, the <span class="mono">README.md</span> at the root of the .c3l becomes the README; publishing a new version refreshes it from the archive unless you uploaded a README yourself. Success returns <span class="mono">201</span> with <span class="mono">{"name", "version", "created", "url"}</span>.</p>
 </section>
 
 <section class="card stack-top">

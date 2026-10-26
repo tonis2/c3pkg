@@ -57,7 +57,7 @@
 <div class="field {{if .Errors.readme}}has-error{{end}}">
   <label for="readme">README (Markdown)</label>
   <input id="readme" name="readme" type="file" accept=".md,.markdown,text/markdown,text/plain">
-  <p class="hint">Optional, up to 512 KB. You can replace it later without publishing a new version.</p>
+  <p class="hint">Optional, up to 512 KB. Without a file here, the <span class="mono">README.md</span> inside your .c3l is used. A README uploaded here replaces it and is kept when you publish new versions.</p>
   {{with .Errors.readme}}<p class="error">{{.}}</p>{{end}}
 </div>
 {{end}}

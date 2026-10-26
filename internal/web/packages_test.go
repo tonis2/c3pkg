@@ -327,3 +327,54 @@ func TestYankEditAndReadme(t *testing.T) {
 		t.Errorf("binary README: %d", resp.StatusCode)
 	}
 }
+
+func TestReadmeFromArchive(t *testing.T) {
+	e := newEnv(t)
+	alice, anon := e.browser(), e.browser()
+	alice.register("alice@example.com", "alice", "s3cret-pass")
+	readme := func(name string) string { _, page := anon.get("/packages/" + name); return page }
+	update := func(version, body string) {
+		t.Helper()
+		resp, out := alice.postMultipart("/dashboard/packages/mylib/publish", map[string]string{"version": version, "c3_version": "0.7.5"},
+			upload{"file", "mylib.c3l", makeC3L(t, "mylib", zfile{"README.md", body})})
+		if resp.StatusCode != 303 {
+			t.Fatalf("publish %s: %d %s", version, resp.StatusCode, out)
+		}
+	}
+
+	// no README upload: the one inside the archive is used (and sanitized)
+	resp, body := alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"),
+		upload{"file", "mylib.c3l", makeC3L(t, "mylib", zfile{"README.md", "# From the zip\n\n<script>alert(1)</script>"})})
+	if resp.StatusCode != 303 {
+		t.Fatalf("publish: %d %s", resp.StatusCode, body)
+	}
+	page := readme("mylib")
+	if !strings.Contains(page, "From the zip") || strings.Contains(page, "<script>alert") {
+		t.Error("README.md from the archive not shown safely")
+	}
+
+	// a new version refreshes it
+	update("1.0.1", "# Second zip")
+	if page := readme("mylib"); !strings.Contains(page, "Second zip") || strings.Contains(page, "From the zip") {
+		t.Error("README should follow the latest archive")
+	}
+
+	// a README uploaded by hand wins, and later archives don't replace it
+	alice.postMultipart("/dashboard/packages/mylib/edit", map[string]string{"description": "Handy library", "tags": "gpu"},
+		upload{"readme", "README.md", []byte("# By hand")})
+	update("1.0.2", "# Third zip")
+	if page := readme("mylib"); !strings.Contains(page, "By hand") || strings.Contains(page, "Third zip") {
+		t.Error("manual README was overwritten by a publish")
+	}
+
+	// a manual upload while creating a package beats the archive's README
+	resp, body = alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"),
+		upload{"file", "other.c3l", makeC3L(t, "other", zfile{"README.md", "# Zip other"})},
+		upload{"readme", "README.md", []byte("# Manual other")})
+	if resp.StatusCode != 303 {
+		t.Fatalf("publish other: %d %s", resp.StatusCode, body)
+	}
+	if page := readme("other"); !strings.Contains(page, "Manual other") || strings.Contains(page, "Zip other") {
+		t.Error("uploaded README should override the archive's")
+	}
+}

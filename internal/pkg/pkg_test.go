@@ -196,3 +196,30 @@ func TestReadme(t *testing.T) {
 		t.Error("readme validation wrong")
 	}
 }
+
+func TestInspectReadme(t *testing.T) {
+	info, _ := pkg.Inspect(goodZip(t), lim)
+	if string(info.Readme) != "# hi" {
+		t.Errorf("readme = %q", info.Readme)
+	}
+	base := []file{{"manifest.json", goodManifest}, {"src/mylib.c3", "module mylib;"}}
+	for name, files := range map[string][]file{
+		"lowercase name": append(base, file{"readme.md", "# lower"}),
+		"missing":        base,
+		"nested only":    append(base, file{"docs/README.md", "# nested"}),
+		"not utf-8":      append(base, file{"README.md", "\xff\xfe"}),
+		"too large":      append(base, file{"README.md", strings.Repeat("x", pkg.MaxReadmeBytes+1)}),
+	} {
+		info, err := pkg.Inspect(makeZip(t, files...), lim)
+		if err != nil {
+			t.Fatalf("%s: a bad README must not reject the upload: %v", name, err)
+		}
+		if name == "lowercase name" {
+			if string(info.Readme) != "# lower" {
+				t.Errorf("%s: readme = %q", name, info.Readme)
+			}
+		} else if info.Readme != nil {
+			t.Errorf("%s: readme should be ignored, got %d bytes", name, len(info.Readme))
+		}
+	}
+}

@@ -43,6 +43,7 @@ type Info struct {
 	Targets    []string // sorted platform names from the manifest
 	FileCount  int
 	Unzipped   int64
+	Readme     []byte // the README.md at the archive root, nil if absent or not valid text
 	SHA256File string // hash of the uploaded bytes
 	SHA256Tree string // hash of the sorted "<sha256>  <path>" listing of the files
 }
@@ -65,7 +66,7 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 
 	type entry struct{ path, sum string }
 	var files []entry
-	var manifestJSON []byte
+	var manifestJSON, readme []byte
 	seen := map[string]bool{}
 	budget := lim.MaxUnzipped
 	for _, f := range zr.File {
@@ -93,6 +94,10 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 		h := sha256.New()
 		var w io.Writer = h
 		var mbuf bytes.Buffer
+		isReadme := readme == nil && strings.EqualFold(clean, "README.md") && f.UncompressedSize64 <= MaxReadmeBytes
+		if isReadme {
+			w = io.MultiWriter(h, &mbuf)
+		}
 		if clean == "manifest.json" {
 			if f.UncompressedSize64 > maxManifestBytes {
 				rc.Close()
@@ -111,6 +116,9 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 		budget -= n
 		if clean == "manifest.json" {
 			manifestJSON = mbuf.Bytes()
+		}
+		if isReadme && ValidateReadme(mbuf.Bytes()) == "" {
+			readme = mbuf.Bytes()
 		}
 		files = append(files, entry{clean, hex.EncodeToString(h.Sum(nil))})
 	}
@@ -165,6 +173,7 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 	return &Info{
 		Name:       m.Provides,
 		Targets:    targets,
+		Readme:     readme,
 		FileCount:  len(files),
 		Unzipped:   lim.MaxUnzipped - budget,
 		SHA256File: hex.EncodeToString(sum[:]),

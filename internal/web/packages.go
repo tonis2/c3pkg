@@ -320,15 +320,24 @@ func (s *Server) doPublish(r *http.Request, expectName, versionOverride string, 
 	info, data := s.readUpload(r, errs, expectName)
 	version, c3 := checkVersionFields(r, errs, versionOverride)
 	var meta store.Meta
-	var readmeMD, readmeHTML string
+	var readmeMD, readmeHTML, readmeSource string
 	if newPackage {
 		meta = readMeta(r, errs)
-		readmeMD, readmeHTML, _ = readReadme(r, errs)
+		var uploaded bool
+		if readmeMD, readmeHTML, uploaded = readReadme(r, errs); uploaded {
+			readmeSource = "manual"
+		}
+	}
+	// No README uploaded by hand: use the README.md inside the archive, if it has one.
+	if readmeSource == "" && info != nil && info.Readme != nil {
+		readmeMD = string(info.Readme)
+		readmeHTML = string(pkg.RenderReadme(readmeMD))
+		readmeSource = "zip"
 	}
 	if len(errs) > 0 {
 		return nil, errs, http.StatusUnprocessableEntity
 	}
-	created, err := s.storeVersion(r, info, data, version, c3, meta, readmeMD, readmeHTML)
+	created, err := s.storeVersion(r, info, data, version, c3, meta, readmeMD, readmeHTML, readmeSource)
 	switch {
 	case errors.Is(err, store.ErrNameTaken), errors.Is(err, store.ErrNotOwner):
 		errs["file"] = fmt.Sprintf("The package name %q is already taken. To publish a new version of your own package, use \"Publish update\".", info.Name)
@@ -387,7 +396,7 @@ func (s *Server) publishSubmit(w http.ResponseWriter, r *http.Request) {
 
 // storeVersion saves the file, then records the version; the file is removed again if the
 // database insert fails and nothing else references it.
-func (s *Server) storeVersion(r *http.Request, info *pkg.Info, data []byte, version, c3 string, meta store.Meta, readmeMD, readmeHTML string) (bool, error) {
+func (s *Server) storeVersion(r *http.Request, info *pkg.Info, data []byte, version, c3 string, meta store.Meta, readmeMD, readmeHTML, readmeSource string) (bool, error) {
 	created, err := s.storage.Put(info.SHA256File, data)
 	if err != nil {
 		return false, err
@@ -395,7 +404,7 @@ func (s *Server) storeVersion(r *http.Request, info *pkg.Info, data []byte, vers
 	pubCreated, err := s.store.PublishVersion(r.Context(), store.PublishParams{
 		UserID: userFrom(r).ID, Name: info.Name, Version: version, C3Version: c3, Targets: info.Targets,
 		Size: int64(len(data)), SHA256File: info.SHA256File, SHA256Tree: info.SHA256Tree, StorageKey: info.SHA256File,
-		Meta: meta, ReadmeMD: readmeMD, ReadmeHTML: readmeHTML,
+		Meta: meta, ReadmeMD: readmeMD, ReadmeHTML: readmeHTML, ReadmeSource: readmeSource,
 	})
 	if err != nil && created {
 		if inUse, uerr := s.store.StorageKeyInUse(r.Context(), info.SHA256File); uerr == nil && !inUse {
