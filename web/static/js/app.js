@@ -4,3 +4,4 @@ import './c3-login-dialog.js';
 import './c3-upload.js';
 import './c3-star-button.js';
 import './c3-install-box.js';
+import './c3-readme-editor.js';

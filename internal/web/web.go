@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /dashboard/packages/{name}/publish", s.requireUser(s.limit(rulePublish, s.publishSubmit)))
 	mux.HandleFunc("GET /dashboard/packages/{name}/edit", s.requireUser(s.editForm))
 	mux.HandleFunc("POST /dashboard/packages/{name}/edit", s.requireUser(s.limit(ruleWrite, s.editSubmit)))
+	mux.HandleFunc("POST /dashboard/readme/preview", s.requireUser(s.limit(ruleWrite, s.readmePreview)))
 	mux.HandleFunc("POST /dashboard/packages/{name}/versions/{version}/yank", s.requireUser(s.setYanked(true)))
 	mux.HandleFunc("POST /dashboard/packages/{name}/versions/{version}/unyank", s.requireUser(s.setYanked(false)))
 

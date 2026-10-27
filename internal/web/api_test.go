@@ -160,6 +160,28 @@ func TestAPIPublishAndRead(t *testing.T) {
 	}
 }
 
+func TestAPIPublishReadme(t *testing.T) {
+	e := newEnv(t)
+	alice := e.token("alice", "a@example.com")
+	readme := func() string { return e.do("GET", "/api/v1/packages/mylib", "", nil, "").JSON(t)["readme"].(string) }
+	publish := func(version, body string, fields map[string]string) {
+		t.Helper()
+		fields["c3_version"] = "0.7.5"
+		if r := e.putPackage(alice, "mylib", version, makeC3L(t, "mylib", zfile{"README.md", body}), fields); r.StatusCode != 201 {
+			t.Fatalf("publish %s: %d %s", version, r.StatusCode, r.Body)
+		}
+	}
+	publish("1.0.0", "# One", map[string]string{"description": "A library"})
+	publish("1.0.1", "# Two", map[string]string{})
+	if got := readme(); got != "# One" {
+		t.Errorf("a publish without readme_from_archive keeps the README, got %q", got)
+	}
+	publish("1.0.2", "# Three", map[string]string{"readme_from_archive": "1"})
+	if got := readme(); got != "# Three" {
+		t.Errorf("readme_from_archive=1 replaces the README, got %q", got)
+	}
+}
+
 func TestAPIManagement(t *testing.T) {
 	e := newEnv(t)
 	alice, bob := e.token("alice", "a@example.com"), e.token("bob", "b@example.com")

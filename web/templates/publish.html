@@ -6,6 +6,10 @@
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     {{template "file_field" .}}
     {{template "version_fields" .}}
+    <div class="field">
+      <label class="check"><input type="checkbox" name="readme_from_archive" value="1"> Replace the README with the README.md from this .c3l</label>
+      <p class="hint">Unchecked keeps the current README. Nothing changes if the .c3l has no README.md. You can also edit the README any time with "Edit package".</p>
+    </div>
     <button class="btn btn-primary" type="submit">Publish version</button>
     <a class="btn" href="/packages/{{.Data.Pkg.Name}}">Cancel</a>
   </form>

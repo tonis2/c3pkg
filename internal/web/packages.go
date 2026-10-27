@@ -285,23 +285,33 @@ func checkMeta(m store.Meta, tagsRaw string, errs map[string]string) store.Meta 
 	return m
 }
 
-// readReadme reads the optional "readme" upload; ok is false if one was sent but invalid.
+// normalizeNewlines converts CRLF to LF; browsers submit textarea text with CRLF.
+func normalizeNewlines(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+// readReadme reads the optional "readme" field, either pasted text or an uploaded file. present
+// is false if the field was not sent at all; an empty text is present and means "no README".
 func readReadme(r *http.Request, errs map[string]string) (md string, html string, present bool) {
-	f, _, err := r.FormFile("readme")
-	if err != nil {
+	var b []byte
+	if f, _, err := r.FormFile("readme"); err == nil {
+		defer f.Close()
+		if b, err = io.ReadAll(io.LimitReader(f, pkg.MaxReadmeBytes+1)); err != nil {
+			errs["readme"] = "Could not read the README."
+			return "", "", true
+		}
+	} else if _, ok := r.PostForm["readme"]; ok {
+		b = []byte(r.PostFormValue("readme"))
+	} else {
 		return "", "", false
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, pkg.MaxReadmeBytes+1))
-	if err != nil {
-		errs["readme"] = "Could not read the README."
-		return "", "", true
-	}
-	if msg := pkg.ValidateReadme(b); msg != "" {
+	md = normalizeNewlines(string(b))
+	if msg := pkg.ValidateReadme([]byte(md)); msg != "" {
 		errs["readme"] = msg
 		return "", "", true
 	}
-	return string(b), string(pkg.RenderReadme(string(b))), true
+	if md == "" {
+		return "", "", true
+	}
+	return md, string(pkg.RenderReadme(md)), true
 }
 
 func formValues(r *http.Request, keys ...string) map[string]string {
@@ -334,13 +344,14 @@ func (s *Server) doPublish(r *http.Request, expectName, versionOverride string, 
 	var readmeMD, readmeHTML, readmeSource string
 	if newPackage {
 		meta = readMeta(r, errs)
-		var uploaded bool
-		if readmeMD, readmeHTML, uploaded = readReadme(r, errs); uploaded {
+		if readmeMD, readmeHTML, _ = readReadme(r, errs); readmeMD != "" {
 			readmeSource = "manual"
 		}
 	}
-	// No README uploaded by hand: use the README.md inside the archive, if it has one.
-	if readmeSource == "" && info != nil && info.Readme != nil {
+	// A new package without a README of its own takes the README.md inside the archive. An existing
+	// package keeps its README unless the owner ticked "replace the README".
+	useArchive := newPackage || r.PostFormValue("readme_from_archive") != ""
+	if readmeSource == "" && useArchive && info != nil && info.Readme != nil {
 		readmeMD = string(info.Readme)
 		readmeHTML = string(pkg.RenderReadme(readmeMD))
 		readmeSource = "zip"
@@ -372,7 +383,7 @@ func (s *Server) newPackageSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(status)
 		s.render(w, r, "new_package", pageData{Title: "New package", Errors: errs,
-			Form: formValues(r, "version", "c3_version", "description", "tags", "license", "docs_url", "git_url"), Data: formData{MaxMB: s.cfg.MaxUploadMB}})
+			Form: formValues(r, "version", "c3_version", "description", "tags", "license", "docs_url", "git_url", "readme"), Data: formData{MaxMB: s.cfg.MaxUploadMB}})
 		return
 	}
 	http.Redirect(w, r, "/packages/"+out.Name, http.StatusSeeOther)
@@ -433,7 +444,7 @@ func (s *Server) editForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form := map[string]string{"description": p.Meta.Description, "license": p.Meta.License, "docs_url": p.Meta.DocsURL,
-		"git_url": p.Meta.GitURL, "tags": strings.Join(p.Meta.Tags, ", ")}
+		"git_url": p.Meta.GitURL, "tags": strings.Join(p.Meta.Tags, ", "), "readme": p.ReadmeMD}
 	s.render(w, r, "edit_package", pageData{Title: "Edit " + p.Name, Form: form, Flash: r.URL.Query().Get("flash"), Data: formData{Pkg: p}})
 }
 
@@ -448,12 +459,13 @@ func (s *Server) editSubmit(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		s.render(w, r, "edit_package", pageData{Title: "Edit " + p.Name, Errors: errs,
-			Form: formValues(r, "description", "license", "docs_url", "git_url", "tags"), Data: formData{Pkg: p}})
+			Form: formValues(r, "description", "license", "docs_url", "git_url", "tags", "readme"), Data: formData{Pkg: p}})
 		return
 	}
 	u := userFrom(r)
 	err := s.store.UpdateMetadata(r.Context(), p.ID, u.ID, meta)
-	if err == nil && hasReadme {
+	// Only a changed README is saved; saving other fields must not mark an archive README as hand-written.
+	if err == nil && hasReadme && md != normalizeNewlines(p.ReadmeMD) {
 		err = s.store.SetReadme(r.Context(), p.ID, u.ID, md, html)
 	}
 	if err != nil {
@@ -461,6 +473,23 @@ func (s *Server) editSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/dashboard/packages/"+p.Name+"/edit?flash=Saved", http.StatusSeeOther)
+}
+
+// readmePreview renders pasted Markdown for the editor's Preview tab with the same renderer as the
+// package page, so what the owner sees is what gets saved.
+func (s *Server) readmePreview(w http.ResponseWriter, r *http.Request) {
+	b, err := io.ReadAll(io.LimitReader(r.Body, pkg.MaxReadmeBytes+1))
+	if err != nil {
+		http.Error(w, "could not read the request body", http.StatusBadRequest)
+		return
+	}
+	md := normalizeNewlines(string(b))
+	if msg := pkg.ValidateReadme([]byte(md)); msg != "" {
+		http.Error(w, msg, http.StatusUnprocessableEntity)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	io.WriteString(w, string(pkg.RenderReadme(md)))
 }
 
 func (s *Server) setYanked(yanked bool) http.HandlerFunc {

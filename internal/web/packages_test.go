@@ -305,10 +305,11 @@ func TestYankEditAndReadme(t *testing.T) {
 		t.Errorf("yank unknown version: %d", resp.StatusCode)
 	}
 
-	// edit metadata and replace the README without a new version
+	// edit metadata and write a README in the browser (CRLF, as a textarea submits it)
 	fields := newPkgFields("")
 	fields["description"], fields["tags"] = "New description", "audio"
-	resp, _ := alice.postMultipart("/dashboard/packages/mylib/edit", fields, upload{"readme", "README.md", []byte("# Fresh readme")})
+	fields["readme"] = "# Fresh readme\r\n\r\nSecond line"
+	resp, _ := alice.postMultipart("/dashboard/packages/mylib/edit", fields)
 	if resp.StatusCode != 303 {
 		t.Fatalf("edit: %d", resp.StatusCode)
 	}
@@ -316,15 +317,58 @@ func TestYankEditAndReadme(t *testing.T) {
 	if !strings.Contains(page, "New description") || !strings.Contains(page, "Fresh readme") || !strings.Contains(page, ">audio<") || strings.Contains(page, ">gpu<") {
 		t.Error("edit not applied")
 	}
-	// leaving the README field empty keeps the existing one
+	// the edit form shows the stored Markdown, with plain newlines, for editing
+	if _, form := alice.get("/dashboard/packages/mylib/edit"); !strings.Contains(form, "# Fresh readme\n\nSecond line") {
+		t.Error("edit form does not show the stored README")
+	}
+	// leaving the README field out keeps the existing one
+	delete(fields, "readme")
 	alice.postMultipart("/dashboard/packages/mylib/edit", fields)
 	if _, page := alice.get("/packages/mylib"); !strings.Contains(page, "Fresh readme") {
-		t.Error("README lost when edit form was saved without a file")
+		t.Error("README lost when edit form was saved without the field")
 	}
-	// an invalid README is rejected
-	resp, body := alice.postMultipart("/dashboard/packages/mylib/edit", fields, upload{"readme", "README.md", []byte{0xff, 0xfe, 0x00}})
+	// a README file part still works
+	alice.postMultipart("/dashboard/packages/mylib/edit", fields, upload{"readme", "README.md", []byte("# Uploaded readme")})
+	if _, page := alice.get("/packages/mylib"); !strings.Contains(page, "Uploaded readme") {
+		t.Error("uploaded README not applied")
+	}
+	// an invalid README is rejected and what was typed comes back
+	fields["readme"] = "bad \xff\xfe text"
+	resp, body := alice.postMultipart("/dashboard/packages/mylib/edit", fields)
 	if resp.StatusCode != 422 || !strings.Contains(body, "UTF-8") {
 		t.Errorf("binary README: %d", resp.StatusCode)
+	}
+	// an empty README clears it
+	fields["readme"] = ""
+	alice.postMultipart("/dashboard/packages/mylib/edit", fields)
+	if _, page := alice.get("/packages/mylib"); strings.Contains(page, "Uploaded readme") || !strings.Contains(page, "has not added a README") {
+		t.Error("emptying the README field should clear it")
+	}
+}
+
+func TestReadmePreview(t *testing.T) {
+	e := newEnv(t)
+	alice := e.browser()
+	alice.register("alice@example.com", "alice", "s3cret-pass")
+	preview := func(b *browser, body string) (*http.Response, string) {
+		t.Helper()
+		req, _ := http.NewRequest("POST", e.srv.URL+"/dashboard/readme/preview", strings.NewReader(body))
+		req.Header.Set("X-CSRF-Token", b.csrf())
+		resp, err := b.c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp, readBody(resp)
+	}
+	resp, out := preview(alice, "# Hello\r\n\r\n<script>alert(1)</script>")
+	if resp.StatusCode != 200 || !strings.Contains(out, "<h1") || !strings.Contains(out, "Hello") || strings.Contains(out, "<script>") {
+		t.Errorf("preview: %d %q", resp.StatusCode, out)
+	}
+	if resp, _ := preview(alice, "bad \xff\xfe"); resp.StatusCode != 422 {
+		t.Errorf("binary preview: %d", resp.StatusCode)
+	}
+	if resp, _ := preview(e.browser(), "# Hello"); resp.StatusCode != 303 {
+		t.Errorf("anonymous preview should redirect to login: %d", resp.StatusCode)
 	}
 }
 
@@ -333,10 +377,15 @@ func TestReadmeFromArchive(t *testing.T) {
 	alice, anon := e.browser(), e.browser()
 	alice.register("alice@example.com", "alice", "s3cret-pass")
 	readme := func(name string) string { _, page := anon.get("/packages/" + name); return page }
-	update := func(version, body string) {
+	// update publishes a version whose archive has a README.md; replace ticks "replace the README".
+	update := func(version, body string, replace bool, files ...zfile) {
 		t.Helper()
-		resp, out := alice.postMultipart("/dashboard/packages/mylib/publish", map[string]string{"version": version, "c3_version": "0.7.5"},
-			upload{"file", "mylib.c3l", makeC3L(t, "mylib", zfile{"README.md", body})})
+		fields := map[string]string{"version": version, "c3_version": "0.7.5"}
+		if replace {
+			fields["readme_from_archive"] = "1"
+		}
+		resp, out := alice.postMultipart("/dashboard/packages/mylib/publish", fields,
+			upload{"file", "mylib.c3l", makeC3L(t, "mylib", append(files, zfile{"README.md", body})...)})
 		if resp.StatusCode != 303 {
 			t.Fatalf("publish %s: %d %s", version, resp.StatusCode, out)
 		}
@@ -353,24 +402,44 @@ func TestReadmeFromArchive(t *testing.T) {
 		t.Error("README.md from the archive not shown safely")
 	}
 
-	// a new version refreshes it
-	update("1.0.1", "# Second zip")
-	if page := readme("mylib"); !strings.Contains(page, "Second zip") || strings.Contains(page, "From the zip") {
-		t.Error("README should follow the latest archive")
+	// a new version keeps the README by default
+	update("1.0.1", "# Second zip", false)
+	if page := readme("mylib"); !strings.Contains(page, "From the zip") || strings.Contains(page, "Second zip") {
+		t.Error("an unticked publish must keep the README")
 	}
 
-	// a README uploaded by hand wins, and later archives don't replace it
-	alice.postMultipart("/dashboard/packages/mylib/edit", map[string]string{"description": "Handy library", "tags": "gpu"},
-		upload{"readme", "README.md", []byte("# By hand")})
-	update("1.0.2", "# Third zip")
-	if page := readme("mylib"); !strings.Contains(page, "By hand") || strings.Contains(page, "Third zip") {
-		t.Error("manual README was overwritten by a publish")
+	// ticking "replace the README" takes the one from the archive
+	update("1.0.2", "# Third zip", true)
+	if page := readme("mylib"); !strings.Contains(page, "Third zip") || strings.Contains(page, "From the zip") {
+		t.Error("a ticked publish should take the archive's README")
 	}
 
-	// a manual upload while creating a package beats the archive's README
-	resp, body = alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"),
-		upload{"file", "other.c3l", makeC3L(t, "other", zfile{"README.md", "# Zip other"})},
-		upload{"readme", "README.md", []byte("# Manual other")})
+	// ticked, but an archive without a README.md keeps the current one
+	resp, out := alice.postMultipart("/dashboard/packages/mylib/publish", map[string]string{"version": "1.0.3", "c3_version": "0.7.5", "readme_from_archive": "1"},
+		upload{"file", "mylib.c3l", makeC3L(t, "mylib")})
+	if resp.StatusCode != 303 {
+		t.Fatalf("publish 1.0.3: %d %s", resp.StatusCode, out)
+	}
+	if page := readme("mylib"); !strings.Contains(page, "Third zip") {
+		t.Error("an archive without a README must not blank the current one")
+	}
+
+	// a README written by hand stays until a publish asks to replace it
+	alice.postMultipart("/dashboard/packages/mylib/edit", map[string]string{"description": "Handy library", "tags": "gpu", "readme": "# By hand"})
+	update("1.0.4", "# Fifth zip", false)
+	if page := readme("mylib"); !strings.Contains(page, "By hand") || strings.Contains(page, "Fifth zip") {
+		t.Error("hand-written README was overwritten by an unticked publish")
+	}
+	update("1.0.5", "# Sixth zip", true)
+	if page := readme("mylib"); !strings.Contains(page, "Sixth zip") || strings.Contains(page, "By hand") {
+		t.Error("ticking should replace even a hand-written README")
+	}
+
+	// a README typed while creating a package beats the archive's README
+	otherFields := newPkgFields("1.0.0")
+	otherFields["readme"] = "# Manual other"
+	resp, body = alice.postMultipart("/dashboard/packages/new", otherFields,
+		upload{"file", "other.c3l", makeC3L(t, "other", zfile{"README.md", "# Zip other"})})
 	if resp.StatusCode != 303 {
 		t.Fatalf("publish other: %d %s", resp.StatusCode, body)
 	}

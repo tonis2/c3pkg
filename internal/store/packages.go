@@ -81,9 +81,9 @@ type PublishParams struct {
 	SHA256Tree string
 	StorageKey string
 	Meta       Meta // applied only when the package is created
-	// The README to apply. Empty ReadmeSource means none. "manual" (uploaded by the user) always
-	// applies; "zip" (taken from the archive) applies to a new package, and to an existing one
-	// unless its owner has uploaded a README by hand.
+	// The README to apply, with where it came from ("zip" or "manual"). Empty ReadmeMD means none:
+	// an existing package keeps its README, so callers set it for an existing package only when
+	// the owner asked to replace the README.
 	ReadmeMD, ReadmeHTML string
 	ReadmeSource         string
 }
@@ -98,8 +98,7 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 
 	var pkgID, ownerID int64
 	var removedAt sql.NullString
-	var currentSource string
-	err = tx.QueryRowContext(ctx, `SELECT id, owner_id, removed_at, readme_source FROM packages WHERE name = ?`, p.Name).Scan(&pkgID, &ownerID, &removedAt, &currentSource)
+	err = tx.QueryRowContext(ctx, `SELECT id, owner_id, removed_at FROM packages WHERE name = ?`, p.Name).Scan(&pkgID, &ownerID, &removedAt)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		res, ierr := tx.ExecContext(ctx,
@@ -124,9 +123,9 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 	case ownerID != p.UserID:
 		return false, ErrNotOwner
 	default:
-		if p.ReadmeSource == "manual" || p.ReadmeSource == "zip" && currentSource != "manual" {
+		if p.ReadmeMD != "" {
 			if _, err := tx.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = ?, readme_render = ? WHERE id = ?`,
-				p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource, pkg.RenderVersion, pkgID); err != nil {
+				p.ReadmeMD, p.ReadmeHTML, readmeSource(p.ReadmeSource), pkg.RenderVersion, pkgID); err != nil {
 				return false, err
 			}
 		}
@@ -323,10 +322,14 @@ func (s *Store) UpdateMetadata(ctx context.Context, pkgID, userID int64, m Meta)
 	return tx.Commit()
 }
 
-// SetReadme stores a README uploaded by the owner; later publishes will not replace it.
+// SetReadme stores a README written by the owner. An empty md clears it.
 func (s *Store) SetReadme(ctx context.Context, pkgID, userID int64, md, html string) error {
-	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = 'manual', readme_render = ? WHERE id = ? AND owner_id = ? AND removed_at IS NULL`,
-		md, html, pkg.RenderVersion, pkgID, userID)
+	source := "manual"
+	if md == "" {
+		source = "zip"
+	}
+	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = ?, readme_render = ? WHERE id = ? AND owner_id = ? AND removed_at IS NULL`,
+		md, html, source, pkg.RenderVersion, pkgID, userID)
 	if err != nil {
 		return err
 	}

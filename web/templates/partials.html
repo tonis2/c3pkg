@@ -56,8 +56,8 @@
 {{define "readme_field"}}
 <div class="field {{if .Errors.readme}}has-error{{end}}">
   <label for="readme">README (Markdown)</label>
-  <input id="readme" name="readme" type="file" accept=".md,.markdown,text/markdown,text/plain">
-  <p class="hint">Optional, up to 512 KB. Without a file here, the <span class="mono">README.md</span> inside your .c3l is used. A README uploaded here replaces it and is kept when you publish new versions.</p>
+  <c3-readme-editor><textarea id="readme" name="readme" rows="14" spellcheck="false">{{.Form.readme}}</textarea></c3-readme-editor>
+  <p class="hint">Optional, up to 512 KB. Type, paste or load a Markdown file.{{if .Data.Pkg}} Clearing it removes the README.{{else}} Left empty, the <span class="mono">README.md</span> inside your .c3l is used.{{end}}</p>
   {{with .Errors.readme}}<p class="error">{{.}}</p>{{end}}
 </div>
 {{end}}

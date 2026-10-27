@@ -112,6 +112,17 @@ h2 { font-size: 20px; margin: 0 0 12px; }
 .readme th, .readme td { border: 1px solid var(--border); padding: 6px 12px; }
 .readme img { max-width: 100%; }
 
+.readme-editor { display: block; }
+.readme-tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.readme-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-muted);
+  font: 600 14px var(--font-ui); padding: 6px 10px; cursor: pointer; }
+.readme-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.readme-load { margin-left: auto; color: var(--accent); font-size: 14px; cursor: pointer; }
+.readme-editor textarea { min-height: 280px; font: 14px/1.5 var(--font-mono); resize: vertical; tab-size: 4; }
+.readme-preview { min-height: 280px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.check { display: flex; align-items: flex-start; gap: 8px; font-weight: 600; }
+.field .check input { width: auto; margin-top: 4px; }
+
 @media (max-width: 800px) {
   .pkg-layout { grid-template-columns: 1fr; }
   .row { flex-direction: column; align-items: stretch; gap: 0; }
