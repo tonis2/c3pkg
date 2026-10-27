@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/tonis/c3pkg/internal/store"
@@ -191,5 +192,34 @@ func TestReadmeSource(t *testing.T) {
 	publish("1.0.4", "uploaded with version", "manual")
 	if readme() != "uploaded with version" {
 		t.Errorf("a manual upload always applies, got %q", readme())
+	}
+}
+
+func TestRerenderReadmes(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	alice, _ := twoUsers(t, s)
+	p := params(alice, "vk", "1.0.0")
+	p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource = "# Hi\n\n```c3\nmodule vk;\n```\n", "<p>old</p>", "zip"
+	if _, err := s.PublishVersion(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PublishVersion(ctx, params(alice, "empty", "1.0.0")); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate rows written by an older renderer.
+	if _, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_render = 0, readme_html = '<p>old</p>'`); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.RerenderReadmes(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("RerenderReadmes = %d, %v; want 1 package re-rendered", n, err)
+	}
+	got, _ := s.PackageByName(ctx, "vk")
+	if !strings.Contains(got.ReadmeHTML, `<pre class="chroma">`) || strings.Contains(got.ReadmeHTML, "old") {
+		t.Errorf("README was not re-rendered: %s", got.ReadmeHTML)
+	}
+	if n, err := s.RerenderReadmes(ctx); err != nil || n != 0 {
+		t.Errorf("second run = %d, %v; want nothing to do", n, err)
 	}
 }

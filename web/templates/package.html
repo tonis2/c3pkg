@@ -88,8 +88,10 @@
     </section>
     {{with .Latest}}
     <section class="card">
-      <h2>Download</h2>
-      <c3-install-box class="install-box"><pre><code>curl -fL -o {{$p.Name}}-{{.Version}}.c3l {{$.Base}}/packages/{{$p.Name}}/{{.Version}}/download</code></pre></c3-install-box>
+      <h2>Install</h2>
+      <c3-install-box class="install-box">{{hl "bash" (printf "c3c --fetch-url %s fetch %s/%s@%s" $.Base $p.OwnerLogin $p.Name .Version)}}</c3-install-box>
+      <h2 class="stack-top">Download</h2>
+      <c3-install-box class="install-box">{{hl "bash" (printf "curl -fL -o %s-%s.c3l %s/packages/%s/%s/download" $p.Name .Version $.Base $p.Name .Version)}}</c3-install-box>
     </section>
     {{end}}
     <section class="card">

@@ -107,6 +107,7 @@ h2 { font-size: 20px; margin: 0 0 12px; }
 .readme pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-x: auto; }
 .readme code { background: var(--surface-raised); border-radius: 4px; padding: 1px 5px; font-size: 90%; }
 .readme pre code { background: none; padding: 0; }
+.readme pre, .docs pre { tab-size: 4; }
 .readme table { border-collapse: collapse; }
 .readme th, .readme td { border: 1px solid var(--border); padding: 6px 12px; }
 .readme img { max-width: 100%; }

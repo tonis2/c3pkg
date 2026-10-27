@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"strings"
 	"time"
+
+	"github.com/tonis/c3pkg/internal/pkg"
 )
 
 var templateFuncs = template.FuncMap{
@@ -32,6 +34,7 @@ var templateFuncs = template.FuncMap{
 		return fmt.Sprintf("%d B", n)
 	},
 	"join": strings.Join,
+	"hl":   pkg.HighlightCode, // {{hl "bash" "text"}}: a highlighted <pre><code> block
 }
 
 func humanAgo(d time.Duration) string {

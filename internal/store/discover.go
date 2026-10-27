@@ -256,3 +256,64 @@ func (s *Store) listSummariesOrdered(ctx context.Context, from, where, order str
 	}
 	return out, nil
 }
+
+// Library is a live package with every version, newest first, as the c3c fetch registry lists it.
+type Library struct {
+	Name        string
+	OwnerLogin  string
+	Description string
+	Tags        []string
+	Versions    []Version
+}
+
+// ListLibraries returns every live package ordered by owner and name, with all of its versions.
+func (s *Store) ListLibraries(ctx context.Context) ([]Library, error) {
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT p.id, p.name, u.login, p.description,
+		        COALESCE((SELECT GROUP_CONCAT(tag, ',') FROM package_tags WHERE package_id = p.id), '')
+		 FROM packages p JOIN users u ON u.id = p.owner_id
+		 WHERE p.removed_at IS NULL ORDER BY u.login, p.name`)
+	if err != nil {
+		return nil, err
+	}
+	var out []Library
+	index := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var l Library
+		var tags string
+		if err := rows.Scan(&id, &l.Name, &l.OwnerLogin, &l.Description, &tags); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		l.Tags = splitTags(tags)
+		index[id] = len(out)
+		out = append(out, l)
+	}
+	rows.Close() // single-connection pool: finish this query before the next
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	vrows, err := s.DB.QueryContext(ctx, `SELECT `+versionCols+` FROM versions`)
+	if err != nil {
+		return nil, err
+	}
+	defer vrows.Close()
+	for vrows.Next() {
+		v, err := scanVersion(vrows)
+		if err != nil {
+			return nil, err
+		}
+		if i, ok := index[v.PackageID]; ok {
+			out[i].Versions = append(out[i].Versions, *v)
+		}
+	}
+	if err := vrows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		sortVersions(out[i].Versions)
+	}
+	return out, nil
+}

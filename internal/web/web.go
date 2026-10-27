@@ -150,6 +150,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/tokens/{id}", s.apiSessionOnly(s.limit(ruleTokens, s.apiRevokeToken)))
 	mux.HandleFunc("GET /index/{name}/{file}", s.limit(ruleDownload, s.index))
 
+	// `c3c fetch` registry protocol, served at the root so --fetch-url is just the site URL.
+	mux.HandleFunc("GET /index.json", s.limit(ruleAPIRead, s.fetchIndex))
+	mux.HandleFunc("GET /info/{ns}/{name}", s.limit(ruleAPIRead, s.fetchInfo))
+	mux.HandleFunc("GET /download/{ns}/{file}", s.limit(ruleDownload, s.fetchDownload))
+
 	var h http.Handler = securityHeaders(s.hsts(s.loadUser(s.globalLimit(s.csrf(mux)))))
 	if s.LogRequests {
 		h = s.accessLog(h)

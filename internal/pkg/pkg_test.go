@@ -182,7 +182,7 @@ func TestNamesAndFields(t *testing.T) {
 
 func TestReadme(t *testing.T) {
 	html := string(pkg.RenderReadme("# Title\n\n```c3\nfn void main() {}\n```\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1)) [ok](https://example.com)\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"))
-	for _, want := range []string{"<h1", "language-c3", "<table", `href="https://example.com"`, `rel="nofollow`} {
+	for _, want := range []string{"<h1", `class="chroma"`, "<table", `href="https://example.com"`, `rel="nofollow`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q in %s", want, html)
 		}

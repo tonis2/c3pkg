@@ -129,30 +129,37 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	fail := func(status int, msg string, err error) {
-		switch {
-		case api && status == http.StatusNotFound:
-			apiError(w, status, msg, nil)
-		case api:
-			s.apiInternal(w, msg, err)
-		case status == http.StatusNotFound:
-			s.notFound(w, r)
-		default:
-			s.serverError(w, msg, err)
-		}
-	}
 	v, err := s.store.VersionByNum(r.Context(), p.ID, r.PathValue("version"))
 	if errors.Is(err, store.ErrNotFound) {
-		fail(http.StatusNotFound, "version not found", nil)
+		s.downloadFail(w, r, api, http.StatusNotFound, "version not found", nil)
 		return
 	}
 	if err != nil {
-		fail(http.StatusInternalServerError, "version lookup", err)
+		s.downloadFail(w, r, api, http.StatusInternalServerError, "version lookup", err)
 		return
 	}
+	s.sendVersion(w, r, p, v, api, true)
+}
+
+func (s *Server) downloadFail(w http.ResponseWriter, r *http.Request, api bool, status int, msg string, err error) {
+	switch {
+	case api && status == http.StatusNotFound:
+		apiError(w, status, msg, nil)
+	case api:
+		s.apiInternal(w, msg, err)
+	case status == http.StatusNotFound:
+		s.notFound(w, r)
+	default:
+		s.serverError(w, msg, err)
+	}
+}
+
+// sendVersion streams a version's .c3l and counts the download. immutable is false for aliases such
+// as "latest", whose target changes: clients must revalidate instead of caching them for a year.
+func (s *Server) sendVersion(w http.ResponseWriter, r *http.Request, p *store.Package, v *store.Version, api, immutable bool) {
 	f, err := s.storage.Open(v.StorageKey)
 	if err != nil {
-		fail(http.StatusInternalServerError, "open stored file", err)
+		s.downloadFail(w, r, api, http.StatusInternalServerError, "open stored file", err)
 		return
 	}
 	defer f.Close()
@@ -166,7 +173,11 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", "application/octet-stream")
 	h.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s.c3l"`, p.Name, v.Version))
 	h.Set("ETag", `"`+v.SHA256File+`"`)
-	h.Set("Cache-Control", "public, max-age=31536000, immutable") // published versions never change
+	if immutable {
+		h.Set("Cache-Control", "public, max-age=31536000, immutable") // published versions never change
+	} else {
+		h.Set("Cache-Control", "no-cache")
+	}
 	http.ServeContent(w, r, "", v.CreatedAtTime(), f)
 }
 

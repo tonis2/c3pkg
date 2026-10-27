@@ -102,9 +102,9 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		res, ierr := tx.ExecContext(ctx,
-			`INSERT INTO packages(name, name_key, owner_id, description, docs_url, git_url, license, readme_md, readme_html, readme_source)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			p.Name, pkg.NameKey(p.Name), p.UserID, p.Meta.Description, p.Meta.DocsURL, p.Meta.GitURL, p.Meta.License, p.ReadmeMD, p.ReadmeHTML, readmeSource(p.ReadmeSource))
+			`INSERT INTO packages(name, name_key, owner_id, description, docs_url, git_url, license, readme_md, readme_html, readme_source, readme_render)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			p.Name, pkg.NameKey(p.Name), p.UserID, p.Meta.Description, p.Meta.DocsURL, p.Meta.GitURL, p.Meta.License, p.ReadmeMD, p.ReadmeHTML, readmeSource(p.ReadmeSource), pkg.RenderVersion)
 		if ierr != nil {
 			if strings.Contains(ierr.Error(), "UNIQUE constraint failed") {
 				return false, ErrNameTaken
@@ -124,8 +124,8 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 		return false, ErrNotOwner
 	default:
 		if p.ReadmeSource == "manual" || p.ReadmeSource == "zip" && currentSource != "manual" {
-			if _, err := tx.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = ? WHERE id = ?`,
-				p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource, pkgID); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = ?, readme_render = ? WHERE id = ?`,
+				p.ReadmeMD, p.ReadmeHTML, p.ReadmeSource, pkg.RenderVersion, pkgID); err != nil {
 				return false, err
 			}
 		}
@@ -324,7 +324,8 @@ func (s *Store) UpdateMetadata(ctx context.Context, pkgID, userID int64, m Meta)
 
 // SetReadme stores a README uploaded by the owner; later publishes will not replace it.
 func (s *Store) SetReadme(ctx context.Context, pkgID, userID int64, md, html string) error {
-	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = 'manual' WHERE id = ? AND owner_id = ? AND removed_at IS NULL`, md, html, pkgID, userID)
+	res, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_md = ?, readme_html = ?, readme_source = 'manual', readme_render = ? WHERE id = ? AND owner_id = ? AND removed_at IS NULL`,
+		md, html, pkg.RenderVersion, pkgID, userID)
 	if err != nil {
 		return err
 	}
@@ -332,6 +333,43 @@ func (s *Store) SetReadme(ctx context.Context, pkgID, userID int64, md, html str
 		return ErrNotOwner
 	}
 	return nil
+}
+
+// RerenderReadmes re-renders stored READMEs that were produced by an older renderer
+// (pkg.RenderVersion) and returns how many it changed. It runs at startup.
+func (s *Store) RerenderReadmes(ctx context.Context) (int, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, readme_md FROM packages WHERE readme_render < ? AND readme_md <> ''`, pkg.RenderVersion)
+	if err != nil {
+		return 0, err
+	}
+	type row struct {
+		id int64
+		md string
+	}
+	var stale []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.md); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		stale = append(stale, r)
+	}
+	rows.Close() // single-connection pool: finish this query before writing
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, r := range stale {
+		if _, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_html = ?, readme_render = ? WHERE id = ?`,
+			string(pkg.RenderReadme(r.md)), pkg.RenderVersion, r.id); err != nil {
+			return 0, err
+		}
+	}
+	// Packages without a README have nothing to render; just mark them current.
+	if _, err := s.DB.ExecContext(ctx, `UPDATE packages SET readme_render = ? WHERE readme_render < ?`, pkg.RenderVersion, pkg.RenderVersion); err != nil {
+		return 0, err
+	}
+	return len(stale), nil
 }
 
 // SetYanked hides (or restores) a version for new installs; the file stays downloadable by exact version.

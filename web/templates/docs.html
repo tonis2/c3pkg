@@ -4,26 +4,37 @@
 <p class="muted">Everything the website does is available over a JSON API, so you can publish from scripts and CI.</p>
 
 <section class="card stack-top">
+  <h2>Install with <span class="mono">c3c fetch</span></h2>
+  <p>c3pkg is a <span class="mono">c3c fetch</span> registry. Give <span class="mono">--fetch-url</span> the address of this site (without a trailing slash) and name a library as <span class="mono">&lt;author&gt;/&lt;package&gt;</span>, where the author is the owner's username shown on the package page. A version is optional and defaults to the latest.</p>
+  {{hl "bash" (printf `c3c --fetch-url %s fetch alice/vk           # latest, unpacked into vk.c3l/
+c3c --fetch-url %s fetch alice/vk@1.0.0    # an exact version
+c3c --fetch-url %s fetch-list              # every library
+c3c --fetch-url %s fetch-list vk           # search by id (or tag:gpu)
+c3c --fetch-url %s fetch-info alice/vk     # versions, checksums and sizes` .Base .Base .Base .Base .Base)}}
+  <p>Behind it are three plain <span class="mono">GET</span>s: <span class="mono">/index.json</span>, <span class="mono">/info/&lt;author&gt;/&lt;package&gt;</span> and <span class="mono">/download/&lt;author&gt;/&lt;package&gt;@&lt;version&gt;</span> (without a version it serves the latest). Yanked versions are not offered as the latest but can still be fetched by exact version. The <span class="mono">checksum</span> in the info record is the <span class="mono">sha256_file</span> described below.</p>
+</section>
+
+<section class="card stack-top">
   <h2>Authentication</h2>
   <p>Create a token under <a href="/settings">Settings → API tokens</a> and send it as a bearer token. Tokens are shown once; keep them secret and revoke any you lose.</p>
-  <pre><code>export C3PKG_TOKEN=c3p_…
-curl -H "Authorization: Bearer $C3PKG_TOKEN" {{.Base}}/api/v1/me</code></pre>
+  {{hl "bash" (printf `export C3PKG_TOKEN=c3p_…
+curl -H "Authorization: Bearer $C3PKG_TOKEN" %s/api/v1/me` .Base)}}
   <p>Errors are JSON: <span class="mono">{"error": "…", "errors": {"field": "message"}}</span>. Requests are rate limited; on <span class="mono">429</span> wait for the <span class="mono">Retry-After</span> seconds.</p>
 </section>
 
 <section class="card stack-top">
   <h2>Publish a library</h2>
   <p>A <span class="mono">.c3l</span> is a zip with <span class="mono">manifest.json</span> at its root. The package name is the manifest's <span class="mono">provides</span>, and it must match the name in the URL. Versions are <a href="https://semver.org">semver</a> (<span class="mono">1.2.3</span> or <span class="mono">1.2.3-rc.1</span>) and can never be changed once published.</p>
-  <pre><code># new package: description is required the first time
+  {{hl "bash" (printf `# new package: description is required the first time
 curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
   -F file=@vk.c3l -F c3_version=0.7.5 \
   -F description="Vulkan bindings for C3" -F tags="gpu,vulkan" -F license=MIT \
-  {{.Base}}/api/v1/packages/vk/versions/1.0.0
+  %s/api/v1/packages/vk/versions/1.0.0
 
 # a new version of a package you own
 curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
   -F file=@vk.c3l -F c3_version=0.7.5 \
-  {{.Base}}/api/v1/packages/vk/versions/1.0.1</code></pre>
+  %s/api/v1/packages/vk/versions/1.0.1` .Base .Base)}}
   <p>Optional form fields for a new package: <span class="mono">license</span>, <span class="mono">docs_url</span>, <span class="mono">git_url</span> and a <span class="mono">readme</span> file. Without one, the <span class="mono">README.md</span> at the root of the .c3l becomes the README; publishing a new version refreshes it from the archive unless you uploaded a README yourself. Success returns <span class="mono">201</span> with <span class="mono">{"name", "version", "created", "url"}</span>.</p>
 </section>
 
@@ -63,10 +74,10 @@ curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
 <section class="card stack-top">
   <h2>Checksums</h2>
   <p>Each version has two SHA-256 values. <span class="mono">sha256_file</span> is the hash of the uploaded <span class="mono">.c3l</span>. <span class="mono">sha256_tree</span> hashes the contents, ignoring zip metadata, so a zipped library and its unpacked directory give the same value:</p>
-  <pre><code>cd unpacked-library
+  {{hl "bash" `cd unpacked-library
 find . -type f | sed 's|^\./||' | LC_ALL=C sort \
   | while read f; do echo "$(sha256sum "$f" | cut -c1-64)  $f"; done \
-  | sha256sum</code></pre>
+  | sha256sum`}}
 </section>
 </div>
 {{end}}

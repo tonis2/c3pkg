@@ -53,6 +53,7 @@ var reservedLogins = map[string]bool{
 	"admin": true, "api": true, "login": true, "logout": true, "register": true, "settings": true,
 	"dashboard": true, "static": true, "auth": true, "index": true, "packages": true, "users": true,
 	"search": true, "about": true, "help": true, "root": true, "c3": true, "c3pkg": true,
+	"info": true, "download": true,
 }
 
 // ValidLogin reports whether s is an allowed username (lowercase letters, digits, hyphens).

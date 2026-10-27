@@ -67,7 +67,8 @@ function makeZip(files) {
   return Buffer.concat([...parts, cd, end]);
 }
 
-const c3l = (name) => makeZip({ 'manifest.json': JSON.stringify({ provides: name, sources: ['src/**'], targets: { 'linux-x64': {} } }), [`src/${name}.c3`]: `module ${name};` });
+const c3l = (name, readme) => makeZip({ 'manifest.json': JSON.stringify({ provides: name, sources: ['src/**'], targets: { 'linux-x64': {} } }), [`src/${name}.c3`]: `module ${name};`, ...(readme ? { 'README.md': readme } : {}) });
+const VULKAN_README = '# vulkan\n\n```c3\nmodule demo;\n\nfn void main()\n{\n\t// a comment\n\tint answer = 42;\n\tString s = "text";\n}\n```\n\n```bash\nc3c fetch vulkan\n```\n\n```\nplain block\n```\n';
 
 async function waitFor(fn, what, ms = 15000) {
   const end = Date.now() + ms;
@@ -88,7 +89,7 @@ before(async () => {
   await alice.form('/register', { email: 'alice@example.com', login: 'alice', name: 'Alice', password: PASSWORD, confirm: PASSWORD });
   const publish = (name, desc, tags, version = '1.0.0') => alice.multipart('/dashboard/packages/new',
     { version, c3_version: '0.7.5', description: desc, tags, license: 'MIT', git_url: `https://github.com/alice/${name}`, docs_url: `https://docs.example.com/${name}` },
-    { name: `${name}.c3l`, data: c3l(name) });
+    { name: `${name}.c3l`, data: c3l(name, name === 'vulkan' ? VULKAN_README : '') });
   for (const [n, d, t] of [['vulkan', 'Vulkan bindings for C3', 'gpu, vulkan'], ['json', 'Fast JSON parser and writer', 'parsing'], ['http', 'A small HTTP client', 'net, parsing'], ['wgpu', 'WebGPU bindings', 'gpu']]) {
     const res = await publish(n, d, t);
     assert.equal(res.status, 303, `seed ${n}`);
@@ -275,10 +276,13 @@ test('upload zone validates the file before submitting', async () => {
 test('copy button puts the download command on the clipboard', async () => {
   const p = await page();
   await p.goto(BASE + '/packages/vulkan');
-  await p.click('c3-install-box button.copy');
-  await until(async () => (await p.locator('c3-install-box button').innerText()).includes('Copied'), 'Copied');
-  const text = await p.evaluate(() => navigator.clipboard.readText());
-  assert.equal(text, `curl -fL -o vulkan-1.0.0.c3l ${BASE}/packages/vulkan/1.0.0/download`);
+  // the install box has two commands: c3c fetch first, then the plain download
+  for (const [i, want] of [`c3c --fetch-url ${BASE} fetch alice/vulkan@1.0.0`, `curl -fL -o vulkan-1.0.0.c3l ${BASE}/packages/vulkan/1.0.0/download`].entries()) {
+    const box = p.locator('c3-install-box').nth(i);
+    await box.locator('button.copy').click();
+    await until(async () => (await box.locator('button').innerText()).includes('Copied'), 'Copied');
+    assert.equal(await p.evaluate(() => navigator.clipboard.readText()), want);
+  }
 });
 
 test('pages work without JavaScript', async () => {
@@ -292,11 +296,30 @@ test('pages work without JavaScript', async () => {
   assert.ok(await p.locator('form[action="/login"] input[name=password]').count());
 });
 
+// Colour of the first element matching sel inside the page.
+const colorOf = (p, sel) => p.locator(sel).first().evaluate((el) => getComputedStyle(el).color);
+
+test('code is syntax highlighted without inline styles', async () => {
+  const p = await page();
+  await p.goto(BASE + '/packages/vulkan');
+  const plain = await colorOf(p, '.readme pre:not(.chroma) code');
+  const keyword = await colorOf(p, '.readme pre.chroma .k');
+  const comment = await colorOf(p, '.readme pre.chroma .c1');
+  const string = await colorOf(p, '.readme pre.chroma .s2');
+  assert.equal(new Set([plain, keyword, comment, string]).size, 4, `token colours should differ: ${[plain, keyword, comment, string]}`);
+  assert.equal(await p.locator('.readme [style]').count(), 0);
+  assert.ok(await p.locator('.install-box pre.chroma span').count() > 0, 'install commands are highlighted');
+  await p.goto(BASE + '/docs/api');
+  assert.ok(await p.locator('.docs pre.chroma span[class]').count() > 0, 'docs code is highlighted');
+  assert.deepEqual(p.errors, []);
+});
+
 test('screenshots of the main pages', async (t) => {
   if (!SHOTS) return t.skip('set SHOTS to a directory to capture screenshots');
   const p = await page();
   await p.goto(BASE + '/?q=gpu&sort=downloads'); await shot(p, 'search');
   await p.goto(BASE + '/packages/vulkan'); await shot(p, 'package');
+  await p.goto(BASE + '/docs/api'); await shot(p, 'docs');
   await p.goto(BASE + '/packages/vulkan/versions'); await shot(p, 'package-versions');
   await p.goto(BASE + '/register'); await shot(p, 'register');
   await login(p);

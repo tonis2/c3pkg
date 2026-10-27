@@ -56,7 +56,14 @@ func main() {
 	}
 	defer database.Close()
 
-	srv, err := web.New(cfg, &store.Store{DB: database}, storage.Local{Dir: cfg.UploadsDir()})
+	st := &store.Store{DB: database}
+	if n, err := st.RerenderReadmes(context.Background()); err != nil {
+		log.Fatalf("re-render readmes: %v", err)
+	} else if n > 0 {
+		log.Printf("re-rendered %d README(s)", n)
+	}
+
+	srv, err := web.New(cfg, st, storage.Local{Dir: cfg.UploadsDir()})
 	if err != nil {
 		log.Fatal(err)
 	}
