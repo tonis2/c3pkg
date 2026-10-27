@@ -96,29 +96,51 @@ func writeCacheable(w http.ResponseWriter, r *http.Request, v any) {
 	w.Write(append(body, '\n'))
 }
 
-// GET /index.json
-func (s *Server) fetchIndex(w http.ResponseWriter, r *http.Request) {
-	libs, err := s.store.ListLibraries(r.Context())
-	if err != nil {
-		s.apiInternal(w, "fetch index", err)
+// searchLimit caps one /search answer; c3c shows a short list and the caller narrows the query.
+const searchLimit = 20
+
+// GET /search?q=<text>&tag=<tag>. It runs the website's search, so the same words match and the
+// order is the same, but only on libraries c3c can fetch (a non-yanked version) and as fetch entries.
+// Browsers (Accept: text/html) are sent to the search page instead.
+func (s *Server) fetchSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Vary", "Accept")
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		// An old /search link in a browser: show the search page. Not a 301, since the same URL
+		// answers JSON to c3c and a cache must not hand it this redirect.
+		target := "/"
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, target, http.StatusFound)
 		return
 	}
-	entries := []fetchEntry{} // an empty registry is {"libraries": []}, never null
-	for _, l := range libs {
-		latest := store.LatestVersion(l.Versions)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 100 {
+		q = q[:100]
+	}
+	tag := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tag")))
+	list, total, err := s.store.ListPackages(r.Context(), store.ListParams{Q: q, Tag: tag, Installable: true, PerPage: searchLimit})
+	if err != nil {
+		s.apiInternal(w, "fetch search", err)
+		return
+	}
+	entries := []fetchEntry{} // no match is {"libraries": []}, never null
+	for _, sm := range list {
+		latest := store.LatestVersion(sm.Versions)
 		if latest == nil {
-			continue // everything yanked: nothing to offer, and c3c needs a `latest`
+			continue // cannot happen with Installable, but c3c rejects an entry without a latest
 		}
-		e := fetchEntry{Library: l.OwnerLogin + "/" + l.Name, Description: l.Description, Tags: nonNil(l.Tags),
+		e := fetchEntry{Library: sm.OwnerLogin + "/" + sm.Name, Description: sm.Description, Tags: nonNil(sm.Tags),
 			Latest: latest.Version, Updated: latest.CreatedAt, Versions: []string{}}
-		for _, v := range l.Versions {
+		for _, v := range sm.Versions {
 			if !v.Yanked {
 				e.Versions = append(e.Versions, v.Version)
 			}
 		}
 		entries = append(entries, e)
 	}
-	writeCacheable(w, r, map[string]any{"libraries": entries})
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"libraries": entries, "total": total})
 }
 
 // fetchPackage loads the live package named by the "name" path value and checks the namespace.

@@ -49,8 +49,14 @@ func TestHomeSearchAndSort(t *testing.T) {
 	if _, res := anon.get("/?q=zzz"); !strings.Contains(res, "Nothing matches") {
 		t.Error("empty result state missing")
 	}
-	if resp, _ := anon.get("/search?q=vulkan&sort=stars"); resp.StatusCode != 301 || resp.Header.Get("Location") != "/?q=vulkan&sort=stars" {
-		t.Errorf("/search should redirect to /, got %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	// old /search links in a browser land on the search page, while API clients get JSON
+	req, _ := http.NewRequest("GET", e.srv.URL+"/search?q=vulkan&sort=stars", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+	if resp, err := anon.c.Do(req); err != nil || resp.StatusCode != 302 || resp.Header.Get("Location") != "/?q=vulkan&sort=stars" {
+		t.Errorf("/search in a browser should redirect to /, got %v %v", resp, err)
+	}
+	if r := e.do("GET", "/search?q=vulkan", "", nil, ""); r.StatusCode != 200 || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") || r.Header.Get("Vary") != "Accept" {
+		t.Errorf("/search without Accept: text/html should be JSON, got %d %s vary=%q", r.StatusCode, r.Header.Get("Content-Type"), r.Header.Get("Vary"))
 	}
 	// hostile queries and bad params never break the page
 	for _, q := range []string{`/?q=%22`, `/?q=a+OR`, `/?page=abc`, `/?page=-3`, `/?sort=drop+table`, `/?page=99999`} {

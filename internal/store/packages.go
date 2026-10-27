@@ -67,6 +67,7 @@ type Summary struct {
 	Stars       int64
 	UpdatedAt   string
 	OwnerLogin  string
+	Versions    []Version // newest first, yanked ones included
 }
 
 type PublishParams struct {

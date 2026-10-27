@@ -9,40 +9,6 @@ import (
 	"testing"
 )
 
-// checkIndex applies the same rules as c3c: every entry must have the required fields with the
-// right types, or the whole index is rejected.
-func checkIndex(t *testing.T, body string) []map[string]any {
-	t.Helper()
-	var top struct {
-		Libraries *[]map[string]any `json:"libraries"`
-	}
-	if err := json.Unmarshal([]byte(body), &top); err != nil || top.Libraries == nil {
-		t.Fatalf("index must be an object with a libraries array: %v %s", err, body)
-	}
-	for _, e := range *top.Libraries {
-		for _, k := range []string{"library", "description", "latest", "updated"} {
-			if _, ok := e[k].(string); !ok {
-				t.Errorf("index entry %v: %q must be a string", e, k)
-			}
-		}
-		if id, _ := e["library"].(string); !strings.Contains(id[:len(id)-1], "/") {
-			t.Errorf("library id %q must be <ns>/<name>", id)
-		}
-		for _, k := range []string{"tags", "versions"} {
-			if arr, ok := e[k].([]any); !ok {
-				t.Errorf("index entry %v: %q must be an array", e, k)
-			} else {
-				for _, x := range arr {
-					if _, ok := x.(string); !ok {
-						t.Errorf("%q holds a non-string", k)
-					}
-				}
-			}
-		}
-	}
-	return *top.Libraries
-}
-
 // versionOrder returns the keys of the "versions" object in document order.
 func versionOrder(t *testing.T, body string) []string {
 	t.Helper()
@@ -101,13 +67,9 @@ func checkInfo(t *testing.T, r apiResp) map[string]any {
 func TestFetchProtocol(t *testing.T) {
 	e := newEnv(t)
 
-	// An empty registry is a valid, empty index.
-	r := e.do("GET", "/index.json", "", nil, "")
-	if r.StatusCode != 200 || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-		t.Fatalf("index.json: %d %s", r.StatusCode, r.Header.Get("Content-Type"))
-	}
-	if got := checkIndex(t, r.Body); len(got) != 0 {
-		t.Fatalf("expected no libraries, got %v", got)
+	// the full index is gone: c3c searches server-side instead
+	if r := e.do("GET", "/index.json", "", nil, ""); r.StatusCode != 404 {
+		t.Fatalf("index.json should be gone: %d", r.StatusCode)
 	}
 
 	tok := e.token("alice", "alice@example.com")
@@ -123,24 +85,6 @@ func TestFetchProtocol(t *testing.T) {
 	if resp := e.putPackage(tok, "json", "0.1.0", makeC3L(t, "json"), apiFields()); resp.StatusCode != 201 {
 		t.Fatalf("publish json: %d %s", resp.StatusCode, resp.Body)
 	}
-
-	t.Run("index", func(t *testing.T) {
-		r := e.do("GET", "/index.json", "", nil, "")
-		libs := checkIndex(t, r.Body)
-		if len(libs) != 2 || libs[0]["library"] != "alice/json" || libs[1]["library"] != "alice/vk" {
-			t.Fatalf("libraries: %v", libs)
-		}
-		vk := libs[1]
-		if vk["latest"] != "1.10.0" || vk["description"] != "A library" {
-			t.Errorf("vk entry: %v", vk)
-		}
-		if got := toStrings(vk["versions"]); strings.Join(got, ",") != "2.0.0-rc.1,1.10.0,1.2.0,1.0.0" {
-			t.Errorf("versions should be newest first: %v", got)
-		}
-		if got := toStrings(vk["tags"]); len(got) != 1 || got[0] != "gpu" {
-			t.Errorf("tags: %v", got)
-		}
-	})
 
 	t.Run("info", func(t *testing.T) {
 		r := e.do("GET", "/info/alice/vk", "", nil, "")
@@ -215,10 +159,6 @@ func TestFetchProtocol(t *testing.T) {
 		if r := e.do("PUT", "/api/v1/packages/vk/versions/1.10.0/yank", tok, nil, ""); r.StatusCode >= 300 {
 			t.Fatalf("yank: %d %s", r.StatusCode, r.Body)
 		}
-		libs := checkIndex(t, e.do("GET", "/index.json", "", nil, "").Body)
-		if libs[1]["latest"] != "1.2.0" || strings.Contains(strings.Join(toStrings(libs[1]["versions"]), ","), "1.10.0") {
-			t.Errorf("yanked version must not be latest or listed: %v", libs[1])
-		}
 		r := e.do("GET", "/info/alice/vk", "", nil, "")
 		m := checkInfo(t, r)
 		if m["latest"] != "1.2.0" || m["versions"].(map[string]any)["1.10.0"].(map[string]any)["yanked"] != true {
@@ -230,12 +170,9 @@ func TestFetchProtocol(t *testing.T) {
 		if r := e.do("GET", "/download/alice/vk", "", nil, ""); r.Body != string(c3l["1.2.0"]) {
 			t.Error("the bare name must skip yanked versions")
 		}
-		// a package whose versions are all yanked disappears from the index and /info
+		// a package whose versions are all yanked disappears from /info
 		if r := e.do("PUT", "/api/v1/packages/json/versions/0.1.0/yank", tok, nil, ""); r.StatusCode >= 300 {
 			t.Fatalf("yank: %d", r.StatusCode)
-		}
-		if got := checkIndex(t, e.do("GET", "/index.json", "", nil, "").Body); len(got) != 1 {
-			t.Errorf("fully yanked package should be hidden: %v", got)
 		}
 		if r := e.do("GET", "/info/alice/json", "", nil, ""); r.StatusCode != 404 {
 			t.Errorf("info of fully yanked package: %d", r.StatusCode)
@@ -243,7 +180,7 @@ func TestFetchProtocol(t *testing.T) {
 	})
 
 	t.Run("etag", func(t *testing.T) {
-		for _, path := range []string{"/index.json", "/info/alice/vk"} {
+		for _, path := range []string{"/info/alice/vk"} {
 			r := e.do("GET", path, "", nil, "")
 			etag := r.Header.Get("ETag")
 			if etag == "" || r.Header.Get("Cache-Control") == "" {
@@ -266,9 +203,6 @@ func TestFetchProtocol(t *testing.T) {
 			if r := e.do("GET", path, "", nil, ""); r.StatusCode != 404 {
 				t.Errorf("%s of a removed package: %d", path, r.StatusCode)
 			}
-		}
-		if got := checkIndex(t, e.do("GET", "/index.json", "", nil, "").Body); len(got) != 0 {
-			t.Errorf("removed package must leave the index: %v", got)
 		}
 	})
 }

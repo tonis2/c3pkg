@@ -103,15 +103,6 @@ func (s *Server) listing(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "home", pageData{Title: title, SearchQ: q, Data: v})
 }
 
-// searchRedirect keeps old /search links working.
-func (s *Server) searchRedirect(w http.ResponseWriter, r *http.Request) {
-	target := "/"
-	if r.URL.RawQuery != "" {
-		target += "?" + r.URL.RawQuery
-	}
-	http.Redirect(w, r, target, http.StatusMovedPermanently)
-}
-
 // ---- stars ----
 
 func (s *Server) setStar(starred bool) http.HandlerFunc {

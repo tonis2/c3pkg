@@ -202,3 +202,31 @@ func TestDownloadStatsAndHomeData(t *testing.T) {
 		t.Errorf("tags = %+v", tags)
 	}
 }
+
+func TestListInstallable(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	alice, _ := seed(t, s)
+	vk, _ := s.PackageByName(ctx, "vk")
+	if err := s.SetYanked(ctx, vk.ID, alice, "1.0.0", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPackageRemoved(ctx, "http", true); err != nil {
+		t.Fatal(err)
+	}
+
+	l, total, err := s.ListPackages(ctx, store.ListParams{Installable: true})
+	if err != nil || total != 2 || len(l) != 2 {
+		t.Fatalf("installable: %v total=%d %v", err, total, names(l))
+	}
+	if l, total, _ := s.ListPackages(ctx, store.ListParams{Installable: true, Q: "vulkan"}); total != 0 || len(l) != 0 {
+		t.Errorf("fully yanked package listed: %v", names(l))
+	}
+	// without the flag the website still lists it
+	if _, total, _ := s.ListPackages(ctx, store.ListParams{Q: "vulkan"}); total != 1 {
+		t.Errorf("default listing changed: %d", total)
+	}
+	l, _, _ = s.ListPackages(ctx, store.ListParams{Installable: true, Q: "json"})
+	if len(l) != 1 || len(l[0].Versions) != 1 || l[0].Versions[0].Version != "1.0.0" || l[0].Latest != "1.0.0" {
+		t.Errorf("summary versions: %+v", l)
+	}
+}

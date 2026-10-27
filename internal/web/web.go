@@ -89,7 +89,6 @@ func (s *Server) Handler() http.Handler {
 		http.Redirect(w, r, "/static/favicon.svg", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("GET /{$}", s.listing)
-	mux.HandleFunc("GET /search", s.searchRedirect)
 
 	mux.HandleFunc("GET /register", s.registerForm)
 	mux.HandleFunc("POST /register", s.limit(ruleRegister, s.registerSubmit))
@@ -151,7 +150,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /index/{name}/{file}", s.limit(ruleDownload, s.index))
 
 	// `c3c fetch` registry protocol, served at the root so --fetch-url is just the site URL.
-	mux.HandleFunc("GET /index.json", s.limit(ruleAPIRead, s.fetchIndex))
+	mux.HandleFunc("GET /search", s.limit(ruleAPIRead, s.fetchSearch))
 	mux.HandleFunc("GET /info/{ns}/{name}", s.limit(ruleAPIRead, s.fetchInfo))
 	mux.HandleFunc("GET /download/{ns}/{file}", s.limit(ruleDownload, s.fetchDownload))
 
