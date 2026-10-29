@@ -238,14 +238,28 @@ func (s *Server) readUpload(r *http.Request, errs map[string]string, expectName 
 	return info, data
 }
 
-func checkVersionFields(r *http.Request, errs map[string]string, versionOverride string) (version, c3 string) {
-	version = strings.TrimSpace(r.PostFormValue("version"))
-	if versionOverride != "" {
-		version = versionOverride
-	}
+func checkVersionFields(r *http.Request, errs map[string]string, versionOverride string, info *pkg.Info) (version, c3 string) {
+	version = versionOverride
 	c3 = strings.TrimSpace(r.PostFormValue("c3_version"))
-	if _, err := pkg.ParseSemver(version); err != nil {
-		errs["version"] = err.Error()
+	if versionOverride != "" {
+		if _, err := pkg.ParseSemver(versionOverride); err != nil {
+			errs["version"] = err.Error()
+		}
+	}
+	// The manifest's version is the version of the library, so that an installed library tells
+	// which version it is. A version in the URL (the API) must be the same.
+	if info != nil && errs["version"] == "" {
+		switch {
+		case info.Version == "":
+			errs["file"] = `manifest.json has no "version". Add one, for example "version": "1.0.0", and build the library again.`
+		default:
+			if _, err := pkg.ParseSemver(info.Version); err != nil {
+				errs["file"] = `manifest.json "version": ` + err.Error()
+			} else if versionOverride != "" && versionOverride != info.Version {
+				errs["version"] = fmt.Sprintf(`manifest.json "version" is %q, but you are publishing %q. Change one so they match.`, info.Version, versionOverride)
+			}
+			version = info.Version
+		}
 	}
 	if msg := pkg.ValidateC3Version(c3); msg != "" {
 		errs["c3_version"] = msg
@@ -339,12 +353,7 @@ type publishOutcome struct {
 func (s *Server) doPublish(r *http.Request, expectName, versionOverride string, newPackage bool) (*publishOutcome, map[string]string, int) {
 	errs := map[string]string{}
 	info, data := s.readUpload(r, errs, expectName)
-	version, c3 := checkVersionFields(r, errs, versionOverride)
-	// The version a library says it is must be the version it is published as, so that c3c can
-	// tell from an installed library's manifest.json which version it has.
-	if info != nil && info.Version != "" && errs["version"] == "" && info.Version != version {
-		errs["version"] = fmt.Sprintf(`manifest.json "version" is %q, but you are publishing %q. Change one so they match.`, info.Version, version)
-	}
+	version, c3 := checkVersionFields(r, errs, versionOverride, info)
 	var meta store.Meta
 	var readmeMD, readmeHTML, readmeSource string
 	if newPackage {
@@ -388,7 +397,7 @@ func (s *Server) newPackageSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(status)
 		s.render(w, r, "new_package", pageData{Title: "New package", Errors: errs,
-			Form: formValues(r, "version", "c3_version", "description", "tags", "license", "docs_url", "git_url", "readme"), Data: formData{MaxMB: s.cfg.MaxUploadMB}})
+			Form: formValues(r, "c3_version", "description", "tags", "license", "docs_url", "git_url", "readme"), Data: formData{MaxMB: s.cfg.MaxUploadMB}})
 		return
 	}
 	http.Redirect(w, r, "/packages/"+out.Name, http.StatusSeeOther)
@@ -415,7 +424,7 @@ func (s *Server) publishSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(status)
 		s.render(w, r, "publish", pageData{Title: "Publish " + p.Name, Errors: errs,
-			Form: formValues(r, "version", "c3_version"), Data: formData{Pkg: p, MaxMB: s.cfg.MaxUploadMB}})
+			Form: formValues(r, "c3_version"), Data: formData{Pkg: p, MaxMB: s.cfg.MaxUploadMB}})
 		return
 	}
 	http.Redirect(w, r, "/packages/"+p.Name, http.StatusSeeOther)

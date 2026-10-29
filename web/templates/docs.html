@@ -22,7 +22,7 @@ curl -H "Authorization: Bearer $C3PKG_TOKEN" %s/api/v1/me` .Base)}}
 
 <section class="card stack-top">
   <h2>Publish a library</h2>
-  <p>A <span class="mono">.c3l</span> is a zip with <span class="mono">manifest.json</span> at its root. The package name is the manifest's <span class="mono">provides</span>, and it must match the name in the URL. If the manifest has a <span class="mono">version</span>, it must equal the version you publish, so that an installed library tells which version it is. Versions are <a href="https://semver.org">semver</a> (<span class="mono">1.2.3</span> or <span class="mono">1.2.3-rc.1</span>) and can never be changed once published.</p>
+  <p>A <span class="mono">.c3l</span> is a zip with <span class="mono">manifest.json</span> at its root. The package name is the manifest's <span class="mono">provides</span>, and it must match the name in the URL. The version is the manifest's <span class="mono">version</span>, and a .c3l without one is rejected. The version in the URL must be the same, so that an installed library tells which version it is. Versions are <a href="https://semver.org">semver</a> (<span class="mono">1.2.3</span> or <span class="mono">1.2.3-rc.1</span>) and can never be changed once published.</p>
   {{hl "bash" (printf `# new package: description is required the first time
 curl -X PUT -H "Authorization: Bearer $C3PKG_TOKEN" \
   -F file=@vk.c3l -F c3_version=0.7.5 \

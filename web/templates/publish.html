@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="card form-card">
   <h1>Publish an update to <span class="mono">{{.Data.Pkg.Name}}</span></h1>
-  <p class="muted">Published versions can't be changed or replaced. Use a new version number.</p>
+  <p class="muted">The version is the <span class="mono">version</span> in the library's manifest.json. Published versions can't be changed or replaced, so build the library with a new version number.</p>
   <form method="post" action="/dashboard/packages/{{.Data.Pkg.Name}}/publish" enctype="multipart/form-data" novalidate>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     {{template "file_field" .}}

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -20,7 +21,7 @@ func makeC3L(t *testing.T, provides string, extra ...zfile) []byte {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	files := []zfile{{"src/" + provides + ".c3", "module " + provides + ";"}}
-	manifest := zfile{"manifest.json", `{"provides":"` + provides + `","sources":["src/**"],"targets":{"linux-x64":{}}}`}
+	manifest := zfile{"manifest.json", `{"provides":"` + provides + `","version":"` + versionPlaceholder + `","sources":["src/**"],"targets":{"linux-x64":{}}}`}
 	for _, f := range extra {
 		if f.name == "manifest.json" {
 			manifest = f // a test's own manifest replaces the default one
@@ -35,6 +36,36 @@ func makeC3L(t *testing.T, provides string, extra ...zfile) []byte {
 			t.Fatal(err)
 		}
 		w.Write([]byte(f.body))
+	}
+	zw.Close()
+	return buf.Bytes()
+}
+
+// versionPlaceholder stands in for the version in the manifest makeC3L writes. The test helpers that
+// upload a library replace it with the version the test publishes, because the version of a library
+// is the one in its manifest.json. A test that passes its own manifest.json controls the version itself.
+const versionPlaceholder = "@VERSION@"
+
+func setVersion(t *testing.T, c3l []byte, version string) []byte {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(c3l), int64(len(c3l)))
+	if err != nil {
+		return c3l // not a zip: the server is expected to reject it
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(rc)
+		rc.Close()
+		if f.Name == "manifest.json" {
+			body = bytes.ReplaceAll(body, []byte(versionPlaceholder), []byte(version))
+		}
+		w, _ := zw.Create(f.Name)
+		w.Write(body)
 	}
 	zw.Close()
 	return buf.Bytes()
@@ -55,7 +86,7 @@ func (b *browser) postMultipart(path string, fields map[string]string, files ...
 	}
 	for _, f := range files {
 		w, _ := mw.CreateFormFile(f.field, f.filename)
-		w.Write(f.data)
+		w.Write(setVersion(b.e.t, f.data, fields["version"]))
 	}
 	mw.Close()
 	req, _ := http.NewRequest("POST", b.e.srv.URL+path, &body)
@@ -88,7 +119,7 @@ func TestPublishAndBrowse(t *testing.T) {
 	alice := e.browser()
 	alice.register("alice@example.com", "alice", "s3cret-pass")
 
-	c3l := makeC3L(t, "mylib")
+	c3l := setVersion(t, makeC3L(t, "mylib"), "1.0.0")
 	resp, body := alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"),
 		upload{"file", "mylib.c3l", c3l},
 		upload{"readme", "README.md", []byte("# Mylib\n\nUse `mylib`.\n\n<script>alert(1)</script>")})
@@ -451,5 +482,34 @@ func TestReadmeFromArchive(t *testing.T) {
 	}
 	if page := readme("other"); !strings.Contains(page, "Manual other") || strings.Contains(page, "Zip other") {
 		t.Error("uploaded README should override the archive's")
+	}
+}
+
+func TestPublishVersionComesFromManifest(t *testing.T) {
+	e := newEnv(t)
+	alice := e.browser()
+	alice.register("alice@example.com", "alice", "s3cret-pass")
+	if _, body := alice.get("/dashboard/packages/new"); strings.Contains(body, `name="version"`) {
+		t.Error("the new package form still asks for a version")
+	}
+	manifest := func(version string) []byte {
+		return makeC3L(t, "mylib", zfile{"manifest.json", `{"provides":"mylib",` + version + `"sources":["src/**"]}`})
+	}
+	fields := newPkgFields("")
+	delete(fields, "version")
+	resp, body := alice.postMultipart("/dashboard/packages/new", fields, upload{"file", "mylib.c3l", manifest(`"version":"3.1.4",`)})
+	if resp.StatusCode != 303 {
+		t.Fatalf("publish with the version only in the manifest: %d %s", resp.StatusCode, body)
+	}
+	if _, page := alice.get("/packages/mylib"); !strings.Contains(page, "3.1.4") {
+		t.Error("the version from the manifest is not on the package page")
+	}
+	resp, body = alice.postMultipart("/dashboard/packages/mylib/publish", map[string]string{"c3_version": "0.7.5"}, upload{"file", "mylib.c3l", manifest("")})
+	if resp.StatusCode != 422 || !strings.Contains(body, "has no") {
+		t.Errorf("a manifest without a version is rejected: %d", resp.StatusCode)
+	}
+	resp, body = alice.postMultipart("/dashboard/packages/mylib/publish", map[string]string{"c3_version": "0.7.5"}, upload{"file", "mylib.c3l", manifest(`"version":"3.1.4",`)})
+	if resp.StatusCode != 409 || !strings.Contains(body, "already published") {
+		t.Errorf("republishing the manifest's version: %d", resp.StatusCode)
 	}
 }

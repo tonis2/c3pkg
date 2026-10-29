@@ -1,7 +1,7 @@
 {{define "content"}}
 <section class="card form-card">
   <h1>New package</h1>
-  <p class="muted">The package name comes from <span class="mono">provides</span> in the library's manifest.</p>
+  <p class="muted">The package name comes from <span class="mono">provides</span> and the version from <span class="mono">version</span> in the library's manifest.json.</p>
   <form method="post" action="/dashboard/packages/new" enctype="multipart/form-data" novalidate>
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     {{template "file_field" .}}

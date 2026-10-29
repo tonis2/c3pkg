@@ -55,7 +55,7 @@ func (e *env) putPackage(token, name, version string, c3l []byte, fields map[str
 		mw.WriteField(k, v)
 	}
 	w, _ := mw.CreateFormFile("file", name+".c3l")
-	w.Write(c3l)
+	w.Write(setVersion(e.t, c3l, version))
 	mw.Close()
 	return e.do("PUT", "/api/v1/packages/"+name+"/versions/"+version, token, &body, mw.FormDataContentType())
 }
@@ -80,7 +80,7 @@ func apiFields() map[string]string {
 func TestAPIPublishAndRead(t *testing.T) {
 	e := newEnv(t)
 	alice, bob := e.token("alice", "a@example.com"), e.token("bob", "b@example.com")
-	c3l := makeC3L(t, "mylib")
+	c3l := setVersion(t, makeC3L(t, "mylib"), "1.0.0")
 
 	// auth failures
 	if r := e.putPackage("", "mylib", "1.0.0", c3l, apiFields()); r.StatusCode != 401 || r.Header.Get("WWW-Authenticate") == "" || r.JSON(t)["error"] == nil {
@@ -100,10 +100,10 @@ func TestAPIPublishAndRead(t *testing.T) {
 		t.Fatalf("second version: %d %s", r.StatusCode, r.Body)
 	}
 	// conflicts and ownership
-	if r := e.putPackage(alice, "mylib", "1.1.0", c3l, map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 409 || r.JSON(t)["errors"].(map[string]any)["version"] == nil {
+	if r := e.putPackage(alice, "mylib", "1.1.0", makeC3L(t, "mylib"), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 409 || r.JSON(t)["errors"].(map[string]any)["version"] == nil {
 		t.Errorf("duplicate: %d %s", r.StatusCode, r.Body)
 	}
-	if r := e.putPackage(bob, "mylib", "2.0.0", c3l, apiFields()); r.StatusCode != 403 {
+	if r := e.putPackage(bob, "mylib", "2.0.0", makeC3L(t, "mylib"), apiFields()); r.StatusCode != 403 {
 		t.Errorf("non-owner: %d", r.StatusCode)
 	}
 	// validation: name in the URL must match the manifest, version/fields checked, new packages need a description
@@ -200,8 +200,12 @@ func TestAPIPublishManifestVersion(t *testing.T) {
 	if r := e.putPackage(alice, "mylib", "1.0.1", withVersion(`1`), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 422 {
 		t.Errorf("a manifest version that is not a string is rejected: %d %s", r.StatusCode, r.Body)
 	}
-	if r := e.putPackage(alice, "mylib", "1.0.1", makeC3L(t, "mylib"), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 201 {
-		t.Errorf("a manifest without a version is still accepted: %d %s", r.StatusCode, r.Body)
+	noVersion := makeC3L(t, "mylib", zfile{"manifest.json", `{"provides":"mylib","sources":["src/**"]}`})
+	if r := e.putPackage(alice, "mylib", "1.0.1", noVersion, map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 422 || !strings.Contains(r.Body, `has no \"version\"`) {
+		t.Errorf("a manifest without a version is rejected: %d %s", r.StatusCode, r.Body)
+	}
+	if r := e.putPackage(alice, "mylib", "1.0.1", withVersion(`"v1"`), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 422 {
+		t.Errorf("a manifest version that is not semver is rejected: %d %s", r.StatusCode, r.Body)
 	}
 }
 
@@ -350,7 +354,7 @@ func cookieHeader(b *browser) string {
 func TestIndexEndpoints(t *testing.T) {
 	e := newEnv(t)
 	alice := e.token("alice", "a@example.com")
-	c3l := makeC3L(t, "mylib")
+	c3l := setVersion(t, makeC3L(t, "mylib"), "1.0.0")
 	e.putPackage(alice, "mylib", "1.0.0", c3l, apiFields())
 
 	j := e.do("GET", "/index/mylib/1.0.0.json", "", nil, "").JSON(t)

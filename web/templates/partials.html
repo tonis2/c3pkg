@@ -1,19 +1,15 @@
 {{define "file_field"}}
-<div class="field {{if .Errors.file}}has-error{{end}}">
+<div class="field {{if or .Errors.file .Errors.version}}has-error{{end}}">
   <label for="file">Library file (.c3l)</label>
   <c3-upload max-mb="{{.Data.MaxMB}}"><input id="file" name="file" type="file" accept=".c3l" required></c3-upload>
-  <p class="hint">A zip with <span class="mono">manifest.json</span> at its root. Up to {{.Data.MaxMB}} MB.</p>
+  <p class="hint">A zip with <span class="mono">manifest.json</span> at its root, which gives the package name and version. Up to {{.Data.MaxMB}} MB.</p>
   {{with .Errors.file}}<p class="error">{{.}}</p>{{end}}
+  {{with .Errors.version}}<p class="error">{{.}}</p>{{end}}
 </div>
 {{end}}
 
 {{define "version_fields"}}
 <div class="row">
-  <div class="field grow {{if .Errors.version}}has-error{{end}}">
-    <label for="version">Version</label>
-    <input id="version" name="version" placeholder="1.0.0" required value="{{.Form.version}}">
-    {{with .Errors.version}}<p class="error">{{.}}</p>{{end}}
-  </div>
   <div class="field grow {{if .Errors.c3_version}}has-error{{end}}">
     <label for="c3_version">Supported C3 version</label>
     <input id="c3_version" name="c3_version" placeholder="0.7.5" required value="{{.Form.c3_version}}">

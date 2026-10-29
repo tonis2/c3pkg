@@ -77,7 +77,7 @@ func TestFetchProtocol(t *testing.T) {
 	fields["git_url"] = "https://github.com/alice/vk"
 	c3l := map[string][]byte{}
 	for _, v := range []string{"1.0.0", "1.2.0", "1.10.0", "2.0.0-rc.1"} {
-		c3l[v] = makeC3L(t, "vk", zfile{"vk.c3", v})
+		c3l[v] = setVersion(t, makeC3L(t, "vk", zfile{"vk.c3", v}), v)
 		if resp := e.putPackage(tok, "vk", v, c3l[v], fields); resp.StatusCode != 201 {
 			t.Fatalf("publish %s: %d %s", v, resp.StatusCode, resp.Body)
 		}
