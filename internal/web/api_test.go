@@ -182,6 +182,29 @@ func TestAPIPublishReadme(t *testing.T) {
 	}
 }
 
+func TestAPIPublishManifestVersion(t *testing.T) {
+	e := newEnv(t)
+	alice := e.token("alice", "a@example.com")
+	withVersion := func(v string) []byte {
+		return makeC3L(t, "mylib", zfile{"manifest.json", `{"provides":"mylib","version":` + v + `,"sources":["src/**"]}`})
+	}
+	fields := func() map[string]string { return apiFields() }
+
+	if r := e.putPackage(alice, "mylib", "1.0.0", withVersion(`"1.0.0"`), fields()); r.StatusCode != 201 {
+		t.Fatalf("a manifest version equal to the published one is accepted: %d %s", r.StatusCode, r.Body)
+	}
+	r := e.putPackage(alice, "mylib", "1.0.1", withVersion(`"1.0.0"`), map[string]string{"c3_version": "0.7.5"})
+	if r.StatusCode != 422 || !strings.Contains(r.Body, "1.0.0") || !strings.Contains(r.Body, "1.0.1") {
+		t.Errorf("a differing manifest version is rejected naming both: %d %s", r.StatusCode, r.Body)
+	}
+	if r := e.putPackage(alice, "mylib", "1.0.1", withVersion(`1`), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 422 {
+		t.Errorf("a manifest version that is not a string is rejected: %d %s", r.StatusCode, r.Body)
+	}
+	if r := e.putPackage(alice, "mylib", "1.0.1", makeC3L(t, "mylib"), map[string]string{"c3_version": "0.7.5"}); r.StatusCode != 201 {
+		t.Errorf("a manifest without a version is still accepted: %d %s", r.StatusCode, r.Body)
+	}
+}
+
 func TestAPIManagement(t *testing.T) {
 	e := newEnv(t)
 	alice, bob := e.token("alice", "a@example.com"), e.token("bob", "b@example.com")

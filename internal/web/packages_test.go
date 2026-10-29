@@ -19,10 +19,16 @@ func makeC3L(t *testing.T, provides string, extra ...zfile) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-	files := append([]zfile{
-		{"manifest.json", `{"provides":"` + provides + `","sources":["src/**"],"targets":{"linux-x64":{}}}`},
-		{"src/" + provides + ".c3", "module " + provides + ";"},
-	}, extra...)
+	files := []zfile{{"src/" + provides + ".c3", "module " + provides + ";"}}
+	manifest := zfile{"manifest.json", `{"provides":"` + provides + `","sources":["src/**"],"targets":{"linux-x64":{}}}`}
+	for _, f := range extra {
+		if f.name == "manifest.json" {
+			manifest = f // a test's own manifest replaces the default one
+		} else {
+			files = append(files, f)
+		}
+	}
+	files = append([]zfile{manifest}, files...)
 	for _, f := range files {
 		w, err := zw.Create(f.name)
 		if err != nil {

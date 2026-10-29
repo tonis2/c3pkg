@@ -33,6 +33,7 @@ func verr(format string, a ...any) error { return &ValidationError{fmt.Sprintf(f
 // Manifest is the part of a library's manifest.json that the registry reads.
 type Manifest struct {
 	Provides string                     `json:"provides"`
+	Version  any                        `json:"version"`
 	Sources  []string                   `json:"sources"`
 	Targets  map[string]json.RawMessage `json:"targets"`
 }
@@ -40,6 +41,7 @@ type Manifest struct {
 // Info describes a validated .c3l archive.
 type Info struct {
 	Name       string   // manifest "provides"
+	Version    string   // manifest "version", empty if the manifest has none
 	Targets    []string // sorted platform names from the manifest
 	FileCount  int
 	Unzipped   int64
@@ -133,6 +135,14 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 	if msg := ValidateName(m.Provides); msg != "" {
 		return nil, verr(`manifest.json "provides" is %q. %s`, m.Provides, msg)
 	}
+	version := ""
+	switch v := m.Version.(type) {
+	case nil:
+	case string:
+		version = v
+	default:
+		return nil, verr(`manifest.json "version" must be a string.`)
+	}
 	sources := m.Sources
 	if len(sources) == 0 {
 		sources = []string{"**"}
@@ -172,6 +182,7 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 	sum := sha256.Sum256(data)
 	return &Info{
 		Name:       m.Provides,
+		Version:    version,
 		Targets:    targets,
 		Readme:     readme,
 		FileCount:  len(files),

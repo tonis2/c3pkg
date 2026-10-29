@@ -340,6 +340,11 @@ func (s *Server) doPublish(r *http.Request, expectName, versionOverride string, 
 	errs := map[string]string{}
 	info, data := s.readUpload(r, errs, expectName)
 	version, c3 := checkVersionFields(r, errs, versionOverride)
+	// The version a library says it is must be the version it is published as, so that c3c can
+	// tell from an installed library's manifest.json which version it has.
+	if info != nil && info.Version != "" && errs["version"] == "" && info.Version != version {
+		errs["version"] = fmt.Sprintf(`manifest.json "version" is %q, but you are publishing %q. Change one so they match.`, info.Version, version)
+	}
 	var meta store.Meta
 	var readmeMD, readmeHTML, readmeSource string
 	if newPackage {
