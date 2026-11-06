@@ -229,3 +229,38 @@ func TestRerenderReadmes(t *testing.T) {
 		t.Errorf("second run = %d, %v; want nothing to do", n, err)
 	}
 }
+
+func TestRequires(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	alice, _ := twoUsers(t, s)
+	p := params(alice, "cui", "1.0.0")
+	p.Requires = []string{"vk", "c3w"}
+	if _, err := s.PublishVersion(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PublishVersion(ctx, params(alice, "vk", "2.0.0")); err != nil {
+		t.Fatal(err)
+	}
+	withDeps := func() (found []store.Version) {
+		all, err := s.AllVersions(ctx)
+		if err != nil || len(all) != 2 {
+			t.Fatalf("all versions: %v %v", all, err)
+		}
+		for _, v := range all {
+			if len(v.Requires) > 0 {
+				found = append(found, v)
+			}
+		}
+		return found
+	}
+	found := withDeps()
+	if len(found) != 1 || strings.Join(found[0].Requires, ",") != "vk,c3w" {
+		t.Fatalf("stored requires: %+v", found)
+	}
+	if err := s.SetRequires(ctx, found[0].ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if found := withDeps(); len(found) != 0 {
+		t.Errorf("after clearing: %+v", found)
+	}
+}

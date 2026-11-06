@@ -438,7 +438,7 @@ func (s *Server) storeVersion(r *http.Request, info *pkg.Info, data []byte, vers
 		return false, err
 	}
 	pubCreated, err := s.store.PublishVersion(r.Context(), store.PublishParams{
-		UserID: userFrom(r).ID, Name: info.Name, Version: version, C3Version: c3, Targets: info.Targets,
+		UserID: userFrom(r).ID, Name: info.Name, Version: version, C3Version: c3, Targets: info.Targets, Requires: info.Requires,
 		Size: int64(len(data)), SHA256File: info.SHA256File, SHA256Tree: info.SHA256Tree, StorageKey: info.SHA256File,
 		Meta: meta, ReadmeMD: readmeMD, ReadmeHTML: readmeHTML, ReadmeSource: readmeSource,
 	})

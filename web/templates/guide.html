@@ -1,0 +1,65 @@
+{{define "content"}}
+<div class="docs guide">
+<h1>Install guide</h1>
+<p class="muted">Find a library on this site, paste one line, run one command.</p>
+
+<section class="card stack-top">
+  <h2>Before you start</h2>
+  <p>You need c3c 0.8.6 or newer. To check your version, run:</p>
+  {{hl "bash" "c3c --version"}}
+  <p>Projects made with <span class="mono">c3c init</span> are ready to go. Other projects need <span class="mono">"dependency-search-paths": ["lib"]</span> in project.json.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Add a library</h2>
+  <p>Copy the line from the library's page into <span class="mono">dependencies</span> in project.json:</p>
+  {{lineBlock (printf `"dependencies": [
+  %s
+],` (installLine .Base "tonis2" "image" "0.0.6"))}}
+  <p>Then download it and build:</p>
+  {{hl "bash" `c3c project fetch image
+c3c build`}}
+  <p>For several libraries, name them all:</p>
+  {{hl "bash" "c3c project fetch image toml"}}
+</section>
+
+<section class="card stack-top">
+  <h2>Update a library</h2>
+  <p>Change the version in project.json, then name the library. Plain <span class="mono">c3c project fetch</span> only checks that a library is there, not which version it is.</p>
+  {{hl "bash" "c3c project fetch image"}}
+</section>
+
+<section class="card stack-top">
+  <h2>Lock to a checksum</h2>
+  <p>Add the checksum to the line, and c3c refuses any file that doesn't match. Every package page has this line under "Lock to a checksum".</p>
+  {{lineBlock (lockedLine .Base "tonis2" "image" "0.0.6" "0b8e4f00245553ae153a5996a488a5a0b0a214cf58f99be48fa1bf0fbe5e7a2c")}}
+</section>
+
+<section class="card stack-top">
+  <h2>Libraries that need other libraries</h2>
+  <p>c3c only builds libraries listed in your project. When a library needs others, its page lists them under Dependencies. Click each one to find it, then add it the same way.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Try a library without a project</h2>
+  <p>This downloads a library into the current folder:</p>
+  {{hl "bash" (printf "c3c --fetch-url %s fetch tonis2/image" .Base)}}
+  <p>Don't use this in a project you share. It saves only the name in project.json, and that can't be found again on another machine.</p>
+</section>
+
+<section class="card stack-top">
+  <h2>Troubleshooting</h2>
+  <div class="table-scroll"><table class="table">
+    <thead><tr><th>c3c says</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">Could not connect to server</td><td>The line has no URL, so c3c tried localhost:8080. Copy the full line from the package page.</td></tr>
+      <tr><td class="mono">failed to fetch the library list</td><td>project.json has only the name. Replace it with the full line from the package page.</td></tr>
+      <tr><td class="mono">All dependencies are installed</td><td>Seen after changing a version? Name the library: <span class="mono">c3c project fetch image</span></td></tr>
+      <tr><td class="mono">Required library 'x' could not be found</td><td>Add x to dependencies and fetch it. c3c only builds libraries listed in your project.</td></tr>
+      <tr><td class="mono">is not a dependency of the project</td><td>Add the line to dependencies first.</td></tr>
+      <tr><td class="mono">Can't open the directory 'lib'</td><td>Nothing has been fetched yet. Run <span class="mono">c3c project fetch image</span> first.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</div>
+{{end}}

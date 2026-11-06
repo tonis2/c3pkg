@@ -2,16 +2,20 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/tonis/c3pkg/internal/config"
 	"github.com/tonis/c3pkg/internal/db"
+	"github.com/tonis/c3pkg/internal/pkg"
+	"github.com/tonis/c3pkg/internal/storage"
 	"github.com/tonis/c3pkg/internal/store"
 	"github.com/tonis/c3pkg/migrations"
 )
@@ -21,6 +25,7 @@ const usage = `usage:
   c3pkg admin grant <email>         make a registered user an administrator
   c3pkg admin revoke <email>        remove administrator rights
   c3pkg backup [dir]                write a consistent SQLite snapshot (keeps the newest 14)
+  c3pkg backfill-deps               read dependencies from stored .c3l files into the database
   c3pkg healthcheck                 exit 0 if the local server answers /healthz
 `
 
@@ -42,6 +47,53 @@ func runAdmin(cfg config.Config, args []string) error {
 	}
 	fmt.Printf("admin %s: %s\n", args[0], args[1])
 	return nil
+}
+
+// runBackfillDeps records dependencies for versions published before they were read from the manifest.
+func runBackfillDeps(cfg config.Config) error {
+	d, err := db.Open(cfg.DBPath(), migrations.FS)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	st := &store.Store{DB: d}
+	files := storage.Local{Dir: cfg.UploadsDir()}
+	ctx := contextBackground()
+	versions, err := st.AllVersions(ctx)
+	if err != nil {
+		return err
+	}
+	updated, failed := 0, 0
+	for _, v := range versions {
+		names, err := storedDependencies(files, v.StorageKey)
+		if err != nil {
+			fmt.Printf("skipped version %d: %v\n", v.ID, err)
+			failed++
+			continue
+		}
+		if slices.Equal(names, v.Requires) {
+			continue
+		}
+		if err := st.SetRequires(ctx, v.ID, names); err != nil {
+			return err
+		}
+		updated++
+	}
+	fmt.Printf("checked %d versions: %d updated, %d skipped\n", len(versions), updated, failed)
+	return nil
+}
+
+func storedDependencies(files storage.Local, key string) ([]string, error) {
+	f, err := files.Open(key)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	return pkg.Dependencies(data)
 }
 
 // runBackup uses VACUUM INTO, which is safe while the server is running (WAL mode).

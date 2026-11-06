@@ -506,7 +506,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"name": p.Name, "version": v.Version, "c3_version": v.C3Version, "targets": nonNil(v.Targets), "requires": []string{},
+			"name": p.Name, "version": v.Version, "c3_version": v.C3Version, "targets": nonNil(v.Targets), "requires": nonNil(v.Requires),
 			"size": v.Size, "sha256_file": v.SHA256File, "sha256_tree": v.SHA256Tree, "yanked": v.Yanked,
 			"download": "/index/" + p.Name + "/" + v.Version + ".c3l"})
 	case strings.HasSuffix(file, ".c3l"):

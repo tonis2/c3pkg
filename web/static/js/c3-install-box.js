@@ -2,11 +2,12 @@ import { LitElement, html } from '/static/vendor/lit/lit-all.min.js';
 
 /** A command in a box with a copy button. The server renders the <code>; this adds the button. */
 export class C3InstallBox extends LitElement {
-  static properties = { copied: { state: true } };
+  static properties = { copied: { state: true }, label: {} };
 
   constructor() {
     super();
     this.copied = false;
+    this.label = 'Copy';
   }
 
   createRenderRoot() { return this; }
@@ -30,7 +31,7 @@ export class C3InstallBox extends LitElement {
   }
 
   render() {
-    return html`<button type="button" class="btn copy" @click=${() => this.copy()} aria-live="polite">${this.copied ? 'Copied ✓' : 'Copy'}</button>`;
+    return html`<button type="button" class="btn copy" @click=${() => this.copy()} aria-live="polite">${this.copied ? 'Copied ✓' : this.label}</button>`;
   }
 }
 customElements.define('c3-install-box', C3InstallBox);

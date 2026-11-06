@@ -67,7 +67,7 @@ function makeZip(files) {
   return Buffer.concat([...parts, cd, end]);
 }
 
-const c3l = (name, readme) => makeZip({ 'manifest.json': JSON.stringify({ provides: name, sources: ['src/**'], targets: { 'linux-x64': {} } }), [`src/${name}.c3`]: `module ${name};`, ...(readme ? { 'README.md': readme } : {}) });
+const c3l = (name, readme, version = '1.0.0') => makeZip({ 'manifest.json': JSON.stringify({ provides: name, version, sources: ['src/**'], targets: { 'linux-x64': {} } }), [`src/${name}.c3`]: `module ${name};`, ...(readme ? { 'README.md': readme } : {}) });
 const VULKAN_README = '# vulkan\n\n```c3\nmodule demo;\n\nfn void main()\n{\n\t// a comment\n\tint answer = 42;\n\tString s = "text";\n}\n```\n\n```bash\nc3c fetch vulkan\n```\n\n```\nplain block\n```\n';
 
 async function waitFor(fn, what, ms = 15000) {
@@ -89,7 +89,7 @@ before(async () => {
   await alice.form('/register', { email: 'alice@example.com', login: 'alice', name: 'Alice', password: PASSWORD, confirm: PASSWORD });
   const publish = (name, desc, tags, version = '1.0.0') => alice.multipart('/dashboard/packages/new',
     { version, c3_version: '0.7.5', description: desc, tags, license: 'MIT', git_url: `https://github.com/alice/${name}`, docs_url: `https://docs.example.com/${name}` },
-    { name: `${name}.c3l`, data: c3l(name, name === 'vulkan' ? VULKAN_README : '') });
+    { name: `${name}.c3l`, data: c3l(name, name === 'vulkan' ? VULKAN_README : '', version) });
   for (const [n, d, t] of [['vulkan', 'Vulkan bindings for C3', 'gpu, vulkan'], ['json', 'Fast JSON parser and writer', 'parsing'], ['http', 'A small HTTP client', 'net, parsing'], ['wgpu', 'WebGPU bindings', 'gpu']]) {
     const res = await publish(n, d, t);
     assert.equal(res.status, 303, `seed ${n}`);
@@ -265,7 +265,6 @@ test('upload zone validates the file before submitting', async () => {
   assert.equal(await input.evaluate((el) => el.validity.valid), true);
   await shot(p, 'new-package-file');
   // submit for real
-  await p.fill('input[name=version]', '1.0.0');
   await p.fill('input[name=c3_version]', '0.7.5');
   await p.fill('input[name=description]', 'Uploaded from the browser test');
   await Promise.all([p.waitForURL('**/packages/okpkg'), p.click('main button[type=submit]')]);
@@ -273,16 +272,34 @@ test('upload zone validates the file before submitting', async () => {
   assert.deepEqual(p.errors, []);
 });
 
-test('copy button puts the download command on the clipboard', async () => {
+test('copy buttons put the install lines on the clipboard', async () => {
   const p = await page();
-  await p.goto(BASE + '/packages/vulkan');
-  // the install box has two commands: c3c fetch first, then the plain download
-  for (const [i, want] of [`c3c --fetch-url ${BASE} fetch alice/vulkan@1.0.0`, `curl -fL -o vulkan-1.0.0.c3l ${BASE}/packages/vulkan/1.0.0/download`].entries()) {
-    const box = p.locator('c3-install-box').nth(i);
-    await box.locator('button.copy').click();
+  const copied = async (box, want) => {
+    await box.locator('button').click();
     await until(async () => (await box.locator('button').innerText()).includes('Copied'), 'Copied');
     assert.equal(await p.evaluate(() => navigator.clipboard.readText()), want);
-  }
+  };
+  await p.goto(BASE + '/packages/vulkan');
+  await p.click('.lock summary');
+  const sha = await p.locator('.hash').getAttribute('title');
+  // the project line, the fetch command, the locked line, then the plain download
+  const want = [`"${BASE}:alice/vulkan@1.0.0"`, 'c3c project fetch vulkan', `"${BASE}:alice/vulkan@1.0.0:${sha}"`,
+    `curl -fL -o vulkan-1.0.0.c3l ${BASE}/packages/vulkan/1.0.0/download`];
+  for (const [i, text] of want.entries()) await copied(p.locator('c3-install-box').nth(i), text);
+  await p.goto(BASE + '/packages/vulkan/versions');
+  await copied(p.locator('.actions c3-install-box').first(), `"${BASE}:alice/vulkan@1.0.0"`);
+});
+
+test('Install comes before the tabs on phones and beside the readme on desktop', async () => {
+  const p = await page();
+  await p.goto(BASE + '/packages/vulkan');
+  const top = (sel) => p.locator(sel).first().evaluate((el) => el.getBoundingClientRect().top);
+  await p.setViewportSize({ width: 390, height: 800 });
+  assert.ok(await top('.install-card') < await top('.tabs'), 'phone: Install above the tabs');
+  await p.setViewportSize({ width: 1280, height: 800 });
+  assert.ok(await top('.install-card') > await top('.tabs'), 'desktop: Install below the tabs, in the sidebar');
+  const overflow = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  assert.ok(overflow <= 0, `no sideways scroll on desktop: ${overflow}`);
 });
 
 test('pages work without JavaScript', async () => {

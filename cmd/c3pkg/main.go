@@ -42,6 +42,9 @@ func main() {
 	case "backup":
 		fatalIf(runBackup(cfg, os.Args[2:]))
 		return
+	case "backfill-deps":
+		fatalIf(runBackfillDeps(cfg))
+		return
 	case "healthcheck":
 		fatalIf(runHealthcheck(cfg))
 		return

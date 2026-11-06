@@ -48,6 +48,7 @@ type Version struct {
 	Version    string
 	C3Version  string
 	Targets    []string
+	Requires   []string // library names this version depends on
 	Size       int64
 	SHA256File string
 	SHA256Tree string
@@ -76,6 +77,7 @@ type PublishParams struct {
 	Version    string
 	C3Version  string
 	Targets    []string
+	Requires   []string
 	Size       int64
 	SHA256File string
 	SHA256Tree string
@@ -133,9 +135,9 @@ func (s *Store) PublishVersion(ctx context.Context, p PublishParams) (created bo
 
 	targets, _ := json.Marshal(p.Targets)
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO versions(package_id, version, c3_version, targets, size_bytes, sha256_file, sha256_tree, storage_key)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		pkgID, p.Version, p.C3Version, string(targets), p.Size, p.SHA256File, p.SHA256Tree, p.StorageKey); err != nil {
+		`INSERT INTO versions(package_id, version, c3_version, targets, requires, size_bytes, sha256_file, sha256_tree, storage_key)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		pkgID, p.Version, p.C3Version, string(targets), requiresJSON(p.Requires), p.Size, p.SHA256File, p.SHA256Tree, p.StorageKey); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return false, ErrVersionExists
 		}
@@ -215,16 +217,50 @@ func splitTags(s string) []string {
 	return t
 }
 
-const versionCols = `id, package_id, version, c3_version, targets, size_bytes, sha256_file, sha256_tree, storage_key, yanked_at IS NOT NULL, created_at`
+const versionCols = `id, package_id, version, c3_version, targets, requires, size_bytes, sha256_file, sha256_tree, storage_key, yanked_at IS NOT NULL, created_at`
 
 func scanVersion(r scanner) (*Version, error) {
 	var v Version
-	var targets string
-	if err := r.Scan(&v.ID, &v.PackageID, &v.Version, &v.C3Version, &targets, &v.Size, &v.SHA256File, &v.SHA256Tree, &v.StorageKey, &v.Yanked, &v.CreatedAt); err != nil {
+	var targets, requires string
+	if err := r.Scan(&v.ID, &v.PackageID, &v.Version, &v.C3Version, &targets, &requires, &v.Size, &v.SHA256File, &v.SHA256Tree, &v.StorageKey, &v.Yanked, &v.CreatedAt); err != nil {
 		return nil, err
 	}
 	json.Unmarshal([]byte(targets), &v.Targets)
+	json.Unmarshal([]byte(requires), &v.Requires)
 	return &v, nil
+}
+
+// requiresJSON stores no dependencies as [], never null.
+func requiresJSON(names []string) string {
+	if len(names) == 0 {
+		return "[]"
+	}
+	b, _ := json.Marshal(names)
+	return string(b)
+}
+
+// AllVersions returns every version of every package, in no particular order.
+func (s *Store) AllVersions(ctx context.Context) ([]Version, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+versionCols+` FROM versions`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Version
+	for rows.Next() {
+		v, err := scanVersion(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *v)
+	}
+	return out, rows.Err()
+}
+
+// SetRequires replaces the dependencies recorded for a version.
+func (s *Store) SetRequires(ctx context.Context, versionID int64, names []string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE versions SET requires = ? WHERE id = ?`, requiresJSON(names), versionID)
+	return err
 }
 
 // VersionsOf returns every version of a package, newest first by semver.

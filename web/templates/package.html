@@ -1,21 +1,49 @@
 {{define "content"}}
 {{with .Data}}
 {{$p := .Pkg}}{{$tab := .Tab}}
-<section class="card">
+<div class="pkg-page">
+<section class="card pkg-head">
   <div class="pkg-title">
-    <h1 class="mono">{{$p.Name}}</h1>
+    <h1 class="mono"><span class="pkg-owner">{{$p.OwnerLogin}}/</span>{{$p.Name}}</h1>
     {{with .Latest}}<span class="version-badge mono">{{.Version}}</span>{{end}}
   </div>
   <p>{{$p.Meta.Description}}</p>
   {{if $p.Meta.Tags}}<div class="tags">{{range $p.Meta.Tags}}<span class="chip">{{.}}</span>{{end}}</div>{{end}}
 </section>
 
+{{with .Latest}}
+<section class="card install-card">
+  <h2>Install</h2>
+  <ol class="install-steps">
+    <li>
+      <p class="step-title">Add to "dependencies" in project.json</p>
+      <c3-install-box class="install-box">{{lineBlock (installLine $.Base $p.OwnerLogin $p.Name .Version)}}</c3-install-box>
+    </li>
+    <li>
+      <p class="step-title">Download it</p>
+      <c3-install-box class="install-box">{{hl "bash" (printf "c3c project fetch %s" $p.Name)}}</c3-install-box>
+    </li>
+  </ol>
+  <a class="install-link" href="/docs/install">Install guide →</a>
+  <details class="lock">
+    <summary>Lock to a checksum</summary>
+    <p class="muted small">Use this line instead. c3c then refuses any file that doesn't match.</p>
+    <c3-install-box class="install-box">{{lineBlock (lockedLine $.Base $p.OwnerLogin $p.Name .Version .SHA256File)}}</c3-install-box>
+  </details>
+</section>
+{{if .Requires}}
+<section class="card deps-card">
+  <h2>Dependencies</h2>
+  <p class="deps-box mono">{{range $i, $name := .Requires}}{{if $i}}<span class="muted">, </span>{{end}}<a href="/?q={{$name}}">{{$name}}</a>{{end}}</p>
+</section>
+{{end}}
+{{end}}
+
 <nav class="tabs">
   <a href="/packages/{{$p.Name}}" class="{{if eq $tab "readme"}}active{{end}}">Readme</a>
   <a href="/packages/{{$p.Name}}/versions" class="{{if eq $tab "versions"}}active{{end}}">Versions <span class="muted">({{len .Versions}})</span></a>
 </nav>
 
-<div class="pkg-layout">
   <div class="pkg-main">
   {{if eq $tab "readme"}}
     <section class="card">
@@ -24,6 +52,11 @@
     </section>
   {{else if eq $tab "versions"}}
     <section class="card">
+      <div class="update-note">
+        <h2>Updating to a new version</h2>
+        <p class="muted">Change the version in project.json, then name the library. Plain <span class="mono">c3c project fetch</span> doesn't notice a version change.</p>
+        <c3-install-box class="install-box">{{hl "bash" (printf "c3c project fetch %s" $p.Name)}}</c3-install-box>
+      </div>
       <div class="table-scroll"><table class="table">
         <thead><tr><th>Version</th><th>C3</th><th>Size</th><th>Downloads</th><th>Published</th><th></th></tr></thead>
         <tbody>
@@ -35,6 +68,7 @@
             <td>{{index $.Data.VersionDownloads .ID}}</td>
             <td>{{date .CreatedAt}}</td>
             <td class="actions">
+              {{if not .Yanked}}<c3-install-box label="Copy line"><code hidden>{{installLine $.Base $p.OwnerLogin $p.Name .Version}}</code></c3-install-box>{{end}}
               <a class="btn" href="/packages/{{$p.Name}}/{{.Version}}/download">Download</a>
               {{if $.Data.IsOwner}}
               <form method="post" class="inline" action="/dashboard/packages/{{$p.Name}}/versions/{{.Version}}/{{if .Yanked}}unyank{{else}}yank{{end}}">
@@ -47,7 +81,7 @@
         {{end}}
         </tbody>
       </table></div>
-      <p class="muted small">Yanked versions are hidden from new installs but stay downloadable by exact version.</p>
+      <p class="muted small">"Copy line" copies that version's line for project.json. Yanked versions are hidden from new installs but stay downloadable by exact version.</p>
     </section>
   {{end}}
   </div>
@@ -60,15 +94,14 @@
     </section>
     {{end}}
     <section class="card">
-      {{with .Latest}}<a class="btn btn-primary wide" href="/packages/{{$p.Name}}/{{.Version}}/download">Download {{.Version}} (.c3l)</a>
-      {{else}}<p class="muted">Every version has been yanked.</p>{{end}}
-      <dl class="meta">
+      {{if not .Latest}}<p class="muted">Every version has been yanked.</p>{{end}}
+      <dl class="meta meta-first">
         <dt>Last updated</dt><dd>{{ago $p.UpdatedAt}}</dd>
         {{with .Latest}}
         <dt>Supported C3</dt><dd class="mono">{{.C3Version}}</dd>
         <dt>Package size</dt><dd>{{size .Size}}</dd>
         {{if .Targets}}<dt>Platforms</dt><dd>{{join .Targets ", "}}</dd>{{end}}
-        <dt>SHA-256 (files)</dt><dd class="mono hash" title="{{.SHA256Tree}}">{{.SHA256Tree}}</dd>
+        <dt>Checksum (SHA-256)</dt><dd class="mono hash" title="{{.SHA256File}}">{{.SHA256File}}</dd>
         {{end}}
         {{with $p.Meta.License}}<dt>License</dt><dd>{{.}}</dd>{{end}}
         <dt>Downloads</dt><dd>{{$p.Downloads}}</dd>
@@ -88,10 +121,9 @@
     </section>
     {{with .Latest}}
     <section class="card">
-      <h2>Install</h2>
-      <c3-install-box class="install-box">{{hl "bash" (printf "c3c --fetch-url %s fetch %s/%s@%s" $.Base $p.OwnerLogin $p.Name .Version)}}</c3-install-box>
-      <h2 class="stack-top">Download</h2>
-      <c3-install-box class="install-box">{{hl "bash" (printf "curl -fL -o %s-%s.c3l %s/packages/%s/%s/download" $p.Name .Version $.Base $p.Name .Version)}}</c3-install-box>
+      <h2>Manual download</h2>
+      <a class="btn wide" href="/packages/{{$p.Name}}/{{.Version}}/download">Download {{.Version}} (.c3l)</a>
+      <c3-install-box class="install-box stack-top">{{hl "bash" (printf "curl -fL -o %s-%s.c3l %s/packages/%s/%s/download" $p.Name .Version $.Base $p.Name .Version)}}</c3-install-box>
     </section>
     {{end}}
     <section class="card">

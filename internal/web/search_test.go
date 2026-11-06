@@ -193,14 +193,14 @@ func TestFetchSearch(t *testing.T) {
 
 	t.Run("page size", func(t *testing.T) {
 		for i := 0; i < searchLimit+5; i++ {
-			publish(fmt.Sprintf("bulk-%02d", i), "Bulky thing", "bulk", "1.0.0")
+			publish(fmt.Sprintf("bulk_%02d", i), "Bulky thing", "bulk", "1.0.0")
 		}
 		libs, total := search("?q=bulky")
 		if len(libs) != searchLimit || total != searchLimit+5 {
 			t.Errorf("want %d of %d, got %d of %d", searchLimit, searchLimit+5, len(libs), total)
 		}
 		// the newest come first
-		if libs[0]["library"] != fmt.Sprintf("alice/bulk-%02d", searchLimit+4) {
+		if libs[0]["library"] != fmt.Sprintf("alice/bulk_%02d", searchLimit+4) {
 			t.Errorf("first: %v", libs[0]["library"])
 		}
 		libs, total = search("")

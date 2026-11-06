@@ -266,11 +266,12 @@ func TestOwnershipAndNames(t *testing.T) {
 			t.Errorf("taken name %s: %d", name, resp.StatusCode)
 		}
 	}
-	alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"), upload{"file", "x.c3l", makeC3L(t, "my-lib")})
-	if resp, _ := bob.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"), upload{"file", "x.c3l", makeC3L(t, "my_lib")}); resp.StatusCode != 409 {
-		t.Errorf("look-alike name: %d", resp.StatusCode)
+	alice.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"), upload{"file", "x.c3l", makeC3L(t, "my_lib")})
+	// c3c can't use a name with '-', so it is refused outright
+	if resp, _ := bob.postMultipart("/dashboard/packages/new", newPkgFields("1.0.0"), upload{"file", "x.c3l", makeC3L(t, "my-lib")}); resp.StatusCode != 422 {
+		t.Errorf("name with a hyphen: %d", resp.StatusCode)
 	}
-	if e.countStored() != stored+1 { // only alice's my-lib upload added a file
+	if e.countStored() != stored+1 { // only alice's my_lib upload added a file
 		t.Errorf("stored files = %d, want %d: rejected uploads must be cleaned up", e.countStored(), stored+1)
 	}
 	// anonymous users are sent to log in

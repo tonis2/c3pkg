@@ -150,7 +150,7 @@ func TestSemver(t *testing.T) {
 }
 
 func TestNamesAndFields(t *testing.T) {
-	for name, ok := range map[string]bool{"vk": true, "my-lib_2": true, "a": false, "1abc": false, "Abc": false, "a b": false, "std": false, strings.Repeat("a", 65): false} {
+	for name, ok := range map[string]bool{"vk": true, "my_lib_2": true, "my-lib": false, "a": false, "1abc": false, "Abc": false, "a b": false, "std": false, strings.Repeat("a", 65): false} {
 		if got := pkg.ValidateName(name) == ""; got != ok {
 			t.Errorf("ValidateName(%q) ok=%v, want %v", name, got, ok)
 		}
@@ -221,5 +221,54 @@ func TestInspectReadme(t *testing.T) {
 		} else if info.Readme != nil {
 			t.Errorf("%s: readme should be ignored, got %d bytes", name, len(info.Readme))
 		}
+	}
+}
+
+func manifestZip(t *testing.T, manifest string) []byte {
+	return makeZip(t, file{"manifest.json", manifest}, file{"src/mylib.c3", "module mylib;"})
+}
+
+func TestInspectDependencies(t *testing.T) {
+	info, err := pkg.Inspect(manifestZip(t, `{"provides":"mylib","sources":["src/**"],"dependencies":["vk","c3w"],
+		"targets":{"windows-x64":{"dependencies":["win32"]},"linux-x64":{"dependencies":["x11","vk"]}}}`), lim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// manifest order, then the targets sorted by name, each name once
+	if got := strings.Join(info.Requires, ","); got != "vk,c3w,x11,win32" {
+		t.Errorf("requires = %s", got)
+	}
+	if info, err := pkg.Inspect(goodZip(t), lim); err != nil || len(info.Requires) != 0 {
+		t.Errorf("no dependencies: %v %v", info, err)
+	}
+}
+
+func TestInspectRejectsOtherDependencyForms(t *testing.T) {
+	for _, dep := range []string{"tonis2/vk", "tonis2/vk@1.0.0", "https://www.c3pkg.eu:tonis2/vk", "my-lib", "Vk", "1vk", ""} {
+		for name, manifest := range map[string]string{
+			"top level": `{"provides":"mylib","sources":["src/**"],"dependencies":["` + dep + `"]}`,
+			"target":    `{"provides":"mylib","sources":["src/**"],"targets":{"linux-x64":{"dependencies":["` + dep + `"]}}}`,
+		} {
+			_, err := pkg.Inspect(manifestZip(t, manifest), lim)
+			var ve *pkg.ValidationError
+			if !errors.As(err, &ve) || !strings.Contains(ve.Msg, "Use the plain library name") {
+				t.Errorf("%s %q: %v", name, dep, err)
+			}
+		}
+	}
+	_, err := pkg.Inspect(manifestZip(t, `{"provides":"mylib","sources":["src/**"],"dependencies":"vk"}`), lim)
+	if err == nil || !strings.Contains(err.Error(), "must be a list") {
+		t.Errorf("not a list: %v", err)
+	}
+}
+
+func TestDependenciesOfStoredArchive(t *testing.T) {
+	// published before validation: keep the plain names, skip the rest
+	names, err := pkg.Dependencies(manifestZip(t, `{"provides":"mylib","dependencies":["vk","tonis2/c3w"],"targets":{"linux-x64":{"dependencies":["x11"]}}}`))
+	if err != nil || strings.Join(names, ",") != "vk,x11" {
+		t.Errorf("names = %v, %v", names, err)
+	}
+	if _, err := pkg.Dependencies(makeZip(t, file{"src/a.c3", "module a;"})); err == nil {
+		t.Error("an archive without a manifest should fail")
 	}
 }

@@ -60,7 +60,7 @@ const (
 )
 
 var pageNames = []string{"home", "register", "login", "dashboard", "settings", "message",
-	"package", "user", "new_package", "publish", "edit_package", "admin", "report", "docs"}
+	"package", "user", "new_package", "publish", "edit_package", "admin", "report", "docs", "guide"}
 
 func New(cfg config.Config, st *store.Store, stor storage.Storage) (*Server, error) {
 	s := &Server{cfg: cfg, store: st, storage: stor, limiter: newLimiter(), github: newGitHubClient(cfg), pages: map[string]*template.Template{}}
@@ -84,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", s.staticFS)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("GET /docs/api", s.docs)
+	mux.HandleFunc("GET /docs/install", s.guide)
 	mux.HandleFunc("GET /robots.txt", s.robots)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/static/favicon.svg", http.StatusMovedPermanently)
@@ -185,6 +186,10 @@ func (s *Server) robots(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) docs(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "docs", pageData{Title: "API"})
+}
+
+func (s *Server) guide(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, "guide", pageData{Title: "Install guide"})
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {

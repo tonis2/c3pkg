@@ -2,16 +2,18 @@
 package pkg
 
 import (
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
 )
 
 var (
-	nameRe       = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,63}$`)
+	nameRe       = regexp.MustCompile(`^[a-z][a-z0-9_]{1,63}$`) // what c3c accepts as a library name
 	tagRe        = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,23}$`)
 	c3VersionRe  = regexp.MustCompile(`^\d{1,4}\.\d{1,4}(\.\d{1,4})?$`)
 	targetNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+	libraryRe    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,126}$`) // what c3c accepts as a library name
 )
 
 const (
@@ -30,11 +32,21 @@ var reservedNames = map[string]bool{
 func ValidateName(name string) string {
 	switch {
 	case !nameRe.MatchString(name):
-		return "Package names are 2–64 characters: lowercase letters, digits, '_' and '-', starting with a letter."
+		return "Package names are 2–64 characters: lowercase letters, digits and '_', starting with a letter."
 	case reservedNames[name]:
 		return "That name is reserved."
 	}
 	return ""
+}
+
+// ValidateDependency returns a user-facing problem with an entry in a manifest's "dependencies",
+// or "" if it is a plain library name. c3c also accepts "owner/name" and URL forms there, but those
+// clash with the line in the user's project: c3c calls the library ambiguous and won't update it.
+func ValidateDependency(name string) string {
+	if libraryRe.MatchString(name) {
+		return ""
+	}
+	return fmt.Sprintf(`manifest.json "dependencies" has %q. Use the plain library name, like "vk".`, name)
 }
 
 // NameKey folds '-' and '_' together so look-alike names cannot both be registered.

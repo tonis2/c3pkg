@@ -32,10 +32,11 @@ func verr(format string, a ...any) error { return &ValidationError{fmt.Sprintf(f
 
 // Manifest is the part of a library's manifest.json that the registry reads.
 type Manifest struct {
-	Provides string                     `json:"provides"`
-	Version  any                        `json:"version"`
-	Sources  []string                   `json:"sources"`
-	Targets  map[string]json.RawMessage `json:"targets"`
+	Provides     string                     `json:"provides"`
+	Version      any                        `json:"version"`
+	Sources      []string                   `json:"sources"`
+	Targets      map[string]json.RawMessage `json:"targets"`
+	Dependencies json.RawMessage            `json:"dependencies"`
 }
 
 // Info describes a validated .c3l archive.
@@ -43,6 +44,7 @@ type Info struct {
 	Name       string   // manifest "provides"
 	Version    string   // manifest "version", empty if the manifest has none
 	Targets    []string // sorted platform names from the manifest
+	Requires   []string // library names from the manifest's "dependencies", its own and its targets'
 	FileCount  int
 	Unzipped   int64
 	Readme     []byte // the README.md at the archive root, nil if absent or not valid text
@@ -173,6 +175,15 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 		targets = append(targets, t)
 	}
 	sort.Strings(targets)
+	requires, err := dependencyList(m)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range requires {
+		if msg := ValidateDependency(name); msg != "" {
+			return nil, verr("%s", msg)
+		}
+	}
 
 	sort.Slice(files, func(i, j int) bool { return files[i].path < files[j].path })
 	tree := sha256.New()
@@ -184,12 +195,89 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 		Name:       m.Provides,
 		Version:    version,
 		Targets:    targets,
+		Requires:   requires,
 		Readme:     readme,
 		FileCount:  len(files),
 		Unzipped:   lim.MaxUnzipped - budget,
 		SHA256File: hex.EncodeToString(sum[:]),
 		SHA256Tree: hex.EncodeToString(tree.Sum(nil)),
 	}, nil
+}
+
+// dependencyList collects the manifest's "dependencies" and those of its targets, in manifest order
+// with the targets sorted by name, each name once.
+func dependencyList(m Manifest) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	add := func(raw json.RawMessage) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		var names []string
+		if err := json.Unmarshal(raw, &names); err != nil {
+			return verr(`manifest.json "dependencies" must be a list of library names.`)
+		}
+		for _, name := range names {
+			if !seen[name] {
+				seen[name] = true
+				out = append(out, name)
+			}
+		}
+		return nil
+	}
+	if err := add(m.Dependencies); err != nil {
+		return nil, err
+	}
+	targets := make([]string, 0, len(m.Targets))
+	for t := range m.Targets {
+		targets = append(targets, t)
+	}
+	sort.Strings(targets)
+	for _, t := range targets {
+		var target struct {
+			Dependencies json.RawMessage `json:"dependencies"`
+		}
+		if json.Unmarshal(m.Targets[t], &target) != nil {
+			continue // not an object: no dependencies to read
+		}
+		if err := add(target.Dependencies); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// Dependencies reads the plain library names from a stored .c3l. It skips anything else, because
+// archives published before dependencies were validated may contain other forms.
+func Dependencies(data []byte) ([]string, error) {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	rc, err := zr.Open("manifest.json")
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	body, err := io.ReadAll(io.LimitReader(rc, maxManifestBytes))
+	if err != nil {
+		return nil, err
+	}
+	var m Manifest
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, err
+	}
+	names, err := dependencyList(m)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, name := range names {
+		if ValidateDependency(name) == "" {
+			out = append(out, name)
+		}
+	}
+	return out, nil
 }
 
 func hasSourceExt(p string) bool {
