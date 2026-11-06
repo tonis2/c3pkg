@@ -272,3 +272,76 @@ func TestDependenciesOfStoredArchive(t *testing.T) {
 		t.Error("an archive without a manifest should fail")
 	}
 }
+
+// As written by `c3c init-lib`, with the version the registry requires added.
+const initLibManifest = `{
+  "provides" : "mylib",
+  "version" : "1.0.0",
+  // "sources" : [ "src/**" ],
+  "linklib-dir" : "linked-libs",
+  "targets" : {
+    "linux-x64" : {
+      // Extra flags to the linker for this target:
+      "link-args" : [],
+      // C3 libraries this target depends on:
+      "dependencies" : [],
+      // The external libraries to link for this target:
+      "linked-libraries" : []
+    },
+    "windows-x64" : {
+      "link-args" : [],
+      "dependencies" : ["vk"],
+      "linked-libraries" : []
+    },
+  }
+}`
+
+func TestInspectManifestWithCommentsAndTrailingCommas(t *testing.T) {
+	info, err := pkg.Inspect(manifestZip(t, initLibManifest), lim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Name != "mylib" || info.Version != "1.0.0" || strings.Join(info.Targets, ",") != "linux-x64,windows-x64" || strings.Join(info.Requires, ",") != "vk" {
+		t.Errorf("info = %+v", info)
+	}
+	if names, err := pkg.Dependencies(manifestZip(t, initLibManifest)); err != nil || strings.Join(names, ",") != "vk" {
+		t.Errorf("stored archive: %v %v", names, err)
+	}
+	// comment and comma lookalikes inside a string are text, and "src/**" must stay a pattern
+	info, err = pkg.Inspect(manifestZip(t, `{
+		/* a block
+		   comment */ "provides": "mylib", /* inline */
+		"version": "1.0.0-a,b//c/*d", // a "quoted" word, and a comma,
+		"sources": ["src/**", /* "other/**", */ ],
+		"dependencies": [
+			"vk", // first
+			"c3w",
+		],
+	}`), lim)
+	if err == nil {
+		if info.Version != "1.0.0-a,b//c/*d" || strings.Join(info.Requires, ",") != "vk,c3w" {
+			t.Errorf("strings changed: %+v", info)
+		}
+	} else {
+		t.Fatal(err)
+	}
+}
+
+func TestInspectStillRejectsWhatC3cRejects(t *testing.T) {
+	for name, manifest := range map[string]string{
+		"comma only in array":  `{"provides":"mylib","sources":[,]}`,
+		"comma only in object": `{,}`,
+		"two commas":           `{"provides":"mylib","sources":["src/**",,]}`,
+		"missing comma":        `{"provides":"mylib" "sources":["src/**"]}`,
+		"unterminated comment": `{"provides":"mylib" /* never closed`,
+		"unterminated string":  `{"provides":"mylib`,
+		"single quotes":        `{'provides':'mylib'}`,
+		"unquoted key":         `{provides:"mylib"}`,
+		"hash comment":         "{\n# no\n\"provides\":\"mylib\"}",
+	} {
+		_, err := pkg.Inspect(manifestZip(t, manifest), lim)
+		if err == nil || !strings.Contains(err.Error(), "not valid JSON") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

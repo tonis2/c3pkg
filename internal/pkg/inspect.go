@@ -131,7 +131,7 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 		return nil, verr("manifest.json is missing from the root of the archive.")
 	}
 	var m Manifest
-	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+	if err := json.Unmarshal(standardJSON(manifestJSON), &m); err != nil {
 		return nil, verr("manifest.json is not valid JSON.")
 	}
 	if msg := ValidateName(m.Provides); msg != "" {
@@ -204,6 +204,57 @@ func Inspect(data []byte, lim Limits) (*Info, error) {
 	}, nil
 }
 
+// standardJSON removes what c3c allows in a manifest beyond JSON: // and /* */ comments, and a comma
+// after the last item of an object or array. `c3c init-lib` writes both. Anything else is left for
+// the JSON parser to reject.
+func standardJSON(src []byte) []byte {
+	out := make([]byte, 0, len(src))
+	lastComma := -1 // where in out a comma waits to see what follows it
+	var last byte   // the last character that wasn't whitespace or a comment
+	for i := 0; i < len(src); i++ {
+		c := src[i]
+		switch {
+		case c == '"':
+			end := i + 1
+			for end < len(src) && src[end] != '"' {
+				if src[end] == '\\' {
+					end++
+				}
+				end++
+			}
+			end = min(end+1, len(src))
+			out = append(out, src[i:end]...)
+			i = end - 1
+			lastComma, last = -1, c
+		case c == '/' && i+1 < len(src) && src[i+1] == '/':
+			for i < len(src) && src[i] != '\n' {
+				i++
+			}
+			i-- // keep the newline
+		case c == '/' && i+1 < len(src) && src[i+1] == '*':
+			closing := bytes.Index(src[i+2:], []byte("*/"))
+			if closing < 0 {
+				return out
+			}
+			i += closing + 3
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+			out = append(out, c)
+		case (c == '}' || c == ']') && lastComma >= 0:
+			out = append(out[:lastComma], out[lastComma+1:]...)
+			out = append(out, c)
+			lastComma, last = -1, c
+		default:
+			lastComma = -1
+			if c == ',' && last != '[' && last != '{' && last != ',' {
+				lastComma = len(out)
+			}
+			out = append(out, c)
+			last = c
+		}
+	}
+	return out
+}
+
 // dependencyList collects the manifest's "dependencies" and those of its targets, in manifest order
 // with the targets sorted by name, each name once.
 func dependencyList(m Manifest) ([]string, error) {
@@ -264,7 +315,7 @@ func Dependencies(data []byte) ([]string, error) {
 		return nil, err
 	}
 	var m Manifest
-	if err := json.Unmarshal(body, &m); err != nil {
+	if err := json.Unmarshal(standardJSON(body), &m); err != nil {
 		return nil, err
 	}
 	names, err := dependencyList(m)
